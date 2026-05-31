@@ -1,0 +1,51 @@
+{
+  "name": "claude-code-mcp-bridge",
+  "version": "0.1.0",
+  "description": "Expose local Claude Code CLI as MCP tools (stdio). Async task lifecycle: run/status/wait/cancel/list/forget.",
+  "type": "module",
+  "bin": {
+    "claude-code-mcp-bridge": "./bin/claude-code-mcp-bridge.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "dev": "tsup --watch",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "npm run typecheck && npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "claude-code",
+    "cli",
+    "agent",
+    "bridge"
+  ],
+  "license": "MIT"
+}
