@@ -1,8 +1,15 @@
 {
-  "name": "claude-code-mcp-bridge",
+  "name": "@restry/claude-code-mcp-bridge",
   "version": "0.1.0",
   "description": "Expose local Claude Code CLI as MCP tools (stdio). Async task lifecycle: run/status/wait/cancel/list/forget.",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Restry/claude-code-mcp-bridge.git"
+  },
   "bin": {
     "claude-code-mcp-bridge": "./bin/claude-code-mcp-bridge.mjs"
   },
