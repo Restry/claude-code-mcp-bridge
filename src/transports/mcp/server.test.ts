@@ -1,0 +1,321 @@
+import { mkdtempSync, mkdirSync, realpathSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import type { AgentEvent, AgentRun } from '../../agent/types';
+
+// --- module mocks -----------------------------------------------------------
+// We drive the *real* startMcpServer (so its handler wiring is exercised), but
+// swap two seams:
+//   1. StdioServerTransport → an InMemoryTransport half, so an in-process MCP
+//      Client can speak to the server without touching real stdio.
+//   2. ClaudeAdapter → a mock AgentAdapter, so `claude` is never spawned.
+// Both class constructors return a pre-seeded object (a returned object from a
+// constructor overrides `new`), wired through a hoisted holder.
+const h = vi.hoisted(() => ({
+  serverTransport: null as unknown,
+  mockAdapter: null as unknown,
+}));
+
+vi.mock('@modelcontextprotocol/sdk/server/stdio.js', () => ({
+  StdioServerTransport: class {
+    constructor() {
+      return h.serverTransport as object;
+    }
+  },
+}));
+
+vi.mock('../../agent/claude/adapter', () => ({
+  ClaudeAdapter: class {
+    constructor() {
+      return h.mockAdapter as object;
+    }
+  },
+}));
+
+import { startMcpServer, type McpServerOptions } from './server';
+
+// --- controllable mock run / adapter ---------------------------------------
+class ControlledRun implements AgentRun {
+  private readonly buffer: AgentEvent[] = [];
+  private pendingResolve: ((v: IteratorResult<AgentEvent>) => void) | null = null;
+  private exited = false;
+  stopped = false;
+
+  events: AsyncIterable<AgentEvent> = {
+    [Symbol.asyncIterator]: () => ({
+      next: (): Promise<IteratorResult<AgentEvent>> => {
+        if (this.buffer.length > 0) {
+          return Promise.resolve({ value: this.buffer.shift()!, done: false });
+        }
+        if (this.exited) {
+          return Promise.resolve({ value: undefined as unknown as AgentEvent, done: true });
+        }
+        return new Promise((resolve) => {
+          this.pendingResolve = resolve;
+        });
+      },
+    }),
+  };
+
+  push(event: AgentEvent): void {
+    if (this.pendingResolve) {
+      const r = this.pendingResolve;
+      this.pendingResolve = null;
+      r({ value: event, done: false });
+    } else {
+      this.buffer.push(event);
+    }
+  }
+
+  end(): void {
+    this.exited = true;
+    if (this.pendingResolve) {
+      const r = this.pendingResolve;
+      this.pendingResolve = null;
+      r({ value: undefined as unknown as AgentEvent, done: true });
+    }
+  }
+
+  async stop(): Promise<void> {
+    this.stopped = true;
+    this.end();
+  }
+
+  async waitForExit(): Promise<boolean> {
+    return this.exited;
+  }
+}
+
+interface MockAdapter {
+  id: string;
+  displayName: string;
+  isAvailable(): Promise<boolean>;
+  run(opts: unknown): AgentRun;
+  runs: ControlledRun[];
+}
+
+function makeMockAdapter(): MockAdapter {
+  const runs: ControlledRun[] = [];
+  return {
+    id: 'mock',
+    displayName: 'mock',
+    isAvailable: async () => true,
+    run() {
+      const run = new ControlledRun();
+      runs.push(run);
+      return run;
+    },
+    runs,
+  };
+}
+
+// --- harness ----------------------------------------------------------------
+const openRuns: ControlledRun[] = [];
+const openClients: Client[] = [];
+
+process.setMaxListeners(50); // startMcpServer registers SIGINT/SIGTERM per call
+
+async function connect(
+  opts: McpServerOptions,
+): Promise<{ client: Client; adapter: MockAdapter }> {
+  const adapter = makeMockAdapter();
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  h.serverTransport = serverTransport;
+  h.mockAdapter = adapter;
+
+  await startMcpServer(opts);
+
+  const client = new Client({ name: 'test-client', version: '0.0.0' });
+  await client.connect(clientTransport);
+  openClients.push(client);
+  // Track runs so we can drain them in teardown.
+  const origRun = adapter.run.bind(adapter);
+  adapter.run = (o: unknown) => {
+    const r = origRun(o) as ControlledRun;
+    openRuns.push(r);
+    return r;
+  };
+  return { client, adapter };
+}
+
+function parse(res: { content: Array<{ type: string; text?: string }> }): any {
+  const block = res.content.find((c) => c.type === 'text');
+  return JSON.parse(block!.text!);
+}
+
+async function callTool(client: Client, name: string, args: Record<string, unknown> = {}) {
+  return (await client.callTool({ name, arguments: args })) as {
+    content: Array<{ type: string; text?: string }>;
+  };
+}
+
+afterEach(async () => {
+  for (const r of openRuns.splice(0)) r.end();
+  for (const c of openClients.splice(0)) await c.close().catch(() => {});
+});
+
+describe('MCP server — tool registration', () => {
+  it('lists exactly the six claude_* tools with input schemas', async () => {
+    const { client } = await connect({});
+    const { tools } = await client.listTools();
+    const names = tools.map((t) => t.name).sort();
+    expect(names).toEqual(
+      [
+        'claude_cancel',
+        'claude_forget',
+        'claude_list',
+        'claude_run',
+        'claude_status',
+        'claude_wait',
+      ].sort(),
+    );
+    const run = tools.find((t) => t.name === 'claude_run')!;
+    expect(run.inputSchema.required).toContain('prompt');
+  });
+});
+
+describe('MCP server — full task lifecycle through one in-process client', () => {
+  it('run → wait → status → list → cancel → forget', async () => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), 'ccmb-life-')));
+    const { client, adapter } = await connect({ cwdRoots: [root] });
+
+    // 1. run → immediate snapshot, status running, seq baseline.
+    const started = parse(await callTool(client, 'claude_run', { prompt: 'hello', cwd: root }));
+    expect(started.status).toBe('running');
+    expect(typeof started.task_id).toBe('string');
+    const taskId = started.task_id as string;
+    expect(adapter.runs).toHaveLength(1);
+
+    // Feed events into the underlying run.
+    const run = adapter.runs[0]!;
+    run.push({ type: 'system', sessionId: 'sess-1', model: 'claude-opus-4-8' });
+    run.push({ type: 'text', delta: 'hello ' });
+    run.push({ type: 'text', delta: 'world' });
+
+    // 2. wait → stream the queued events the way a real client would: start at
+    // from_seq=-1 (claude_wait is *strictly after* the cursor, so 0 would skip
+    // seq 0), then advance the cursor past the highest seq seen each round.
+    // The task stays running, so loop until we've drained the three pushed
+    // events (with a guard) rather than blocking a full timeout on round 4.
+    const drained: Array<{ seq: number; event: AgentEvent }> = [];
+    let cursor = -1;
+    for (let i = 0; i < 10 && drained.length < 3; i++) {
+      const waited = parse(
+        await callTool(client, 'claude_wait', {
+          task_id: taskId,
+          from_seq: cursor,
+          timeout_ms: 1000,
+        }),
+      );
+      for (const r of waited.events) {
+        drained.push(r);
+        cursor = Math.max(cursor, r.seq);
+      }
+    }
+    expect(drained.map((e) => e.event.type)).toEqual(['system', 'text', 'text']);
+    expect(drained.map((e) => e.seq)).toEqual([0, 1, 2]); // 0-based, monotonic, gapless
+
+    // 3. status → accumulated text + session captured from the system event.
+    const status = parse(await callTool(client, 'claude_status', { task_id: taskId }));
+    expect(status.status).toBe('running');
+    expect(status.text).toBe('hello world');
+    expect(status.session_id).toBe('sess-1');
+
+    // 4. list → the task is visible.
+    const listed = parse(await callTool(client, 'claude_list'));
+    expect(listed.tasks.map((t: any) => t.task_id)).toContain(taskId);
+
+    // 5. cancel → status flips to cancelled and the run was stopped.
+    const cancelled = parse(await callTool(client, 'claude_cancel', { task_id: taskId }));
+    expect(cancelled.cancelled).toBe(true);
+    expect(run.stopped).toBe(true);
+    const afterCancel = parse(await callTool(client, 'claude_status', { task_id: taskId }));
+    expect(afterCancel.status).toBe('cancelled');
+
+    // 6. forget → drops the (now terminal) task.
+    const forgotten = parse(await callTool(client, 'claude_forget', { task_id: taskId }));
+    expect(forgotten.forgotten).toBe(true);
+    await expect(callTool(client, 'claude_status', { task_id: taskId })).rejects.toThrow(
+      /unknown task_id/,
+    );
+  });
+
+  it('claude_wait returns immediately (empty) once a task is terminal', async () => {
+    const { client, adapter } = await connect({});
+    const started = parse(await callTool(client, 'claude_run', { prompt: 'p' }));
+    const taskId = started.task_id as string;
+    const run = adapter.runs[0]!;
+    run.push({ type: 'done', sessionId: 's' });
+    run.end();
+    // Drain to terminal.
+    await callTool(client, 'claude_wait', { task_id: taskId, from_seq: 0, timeout_ms: 1000 });
+
+    const start = Date.now();
+    const again = parse(
+      await callTool(client, 'claude_wait', { task_id: taskId, from_seq: 999, timeout_ms: 5000 }),
+    );
+    expect(Date.now() - start).toBeLessThan(1000); // did NOT block the full timeout
+    expect(again.events).toEqual([]);
+    expect(again.snapshot.status).toBe('done');
+  });
+});
+
+describe('MCP server — cwd whitelist enforcement', () => {
+  let rootA: string;
+  let rootB: string;
+  let outside: string;
+  let client: Client;
+
+  beforeEach(async () => {
+    rootA = realpathSync(mkdtempSync(join(tmpdir(), 'ccmb-rootA-')));
+    rootB = realpathSync(mkdtempSync(join(tmpdir(), 'ccmb-rootB-')));
+    outside = realpathSync(mkdtempSync(join(tmpdir(), 'ccmb-out-')));
+    ({ client } = await connect({ cwdRoots: [rootA, rootB] }));
+  });
+
+  it('rejects a cwd outside every root, never starting a task', async () => {
+    await expect(
+      callTool(client, 'claude_run', { prompt: 'p', cwd: outside }),
+    ).rejects.toThrow(/outside the allowed roots/);
+  });
+
+  it('rejects a ../ traversal that escapes a root', async () => {
+    const escape = join(rootA, '..', 'totally-elsewhere');
+    await expect(
+      callTool(client, 'claude_run', { prompt: 'p', cwd: escape }),
+    ).rejects.toThrow(/outside the allowed roots/);
+  });
+
+  it('allows a cwd under any configured root (multi-root)', async () => {
+    const subA = join(rootA, 'pkg');
+    const subB = join(rootB, 'svc');
+    mkdirSync(subA);
+    mkdirSync(subB);
+
+    const a = parse(await callTool(client, 'claude_run', { prompt: 'p', cwd: subA }));
+    expect(a.status).toBe('running');
+    const b = parse(await callTool(client, 'claude_run', { prompt: 'p', cwd: subB }));
+    expect(b.status).toBe('running');
+  });
+
+  // SKIPPED in the test commit, enabled in the follow-up fix commit.
+  // BUG: resolveCwd() in server.ts normalizes with path.resolve only — it does
+  // NOT call fs.realpath — so a symlink physically located under a root but
+  // pointing outside it passes the prefix check, letting Claude spawn with a
+  // cwd outside every allowed root. PRD §7 ("Resolved ... then prefix-checked")
+  // and §11 ("Path-whitelist tests: ... symlinks") expect this to be rejected.
+  // The fix resolves the real path of both candidate and roots before checking.
+  it.skip('rejects a symlink inside a root that resolves outside every root', async () => {
+    // A symlink physically located under rootA but pointing at `outside`.
+    // path.resolve alone won't catch this — the whitelist must resolve the
+    // real path (fs.realpath) before the prefix check.
+    const link = join(rootA, 'escape-link');
+    symlinkSync(outside, link);
+    await expect(
+      callTool(client, 'claude_run', { prompt: 'p', cwd: link }),
+    ).rejects.toThrow(/outside the allowed roots/);
+  });
+});
