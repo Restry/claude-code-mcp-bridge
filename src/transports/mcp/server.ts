@@ -4,6 +4,7 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
+import { realpathSync } from 'node:fs';
 import { resolve as resolvePath, sep as pathSep } from 'node:path';
 import { ClaudeAdapter } from '../../agent/claude/adapter';
 import { TaskRegistry, type TaskEventRecord, type TaskSnapshot } from './task-registry';
@@ -118,10 +119,14 @@ function recordsToWire(records: TaskEventRecord[]) {
 
 function resolveCwd(opts: McpServerOptions, requested?: string): string {
   const raw = requested?.trim() || opts.defaultCwd?.trim() || process.cwd();
-  // Normalize ./.. away so the whitelist check can't be bypassed via "/root/../etc".
-  const candidate = resolvePath(raw);
+  // Normalize ./.. away, THEN resolve symlinks. path.resolve alone is purely
+  // lexical, so a symlink physically located under a root but pointing outside
+  // it would slip past the prefix check; fs.realpath collapses it to its real
+  // target before we compare. Roots are realpath'd too, so a legitimate cwd
+  // under a symlinked root (e.g. macOS /tmp → /private/tmp) still matches.
+  const candidate = realpathOrLexical(resolvePath(raw));
   if (opts.cwdRoots && opts.cwdRoots.length > 0) {
-    const normalizedRoots = opts.cwdRoots.map((r) => resolvePath(r));
+    const normalizedRoots = opts.cwdRoots.map((r) => realpathOrLexical(resolvePath(r)));
     const ok = normalizedRoots.some(
       (root) => candidate === root || candidate.startsWith(root + pathSep),
     );
@@ -132,6 +137,19 @@ function resolveCwd(opts: McpServerOptions, requested?: string): string {
     }
   }
   return candidate;
+}
+
+/**
+ * Resolve symlinks to a real path. Falls back to the (already lexically
+ * resolved) input when the path doesn't exist yet, so non-existent cwds keep
+ * their previous lexical-only behaviour instead of throwing ENOENT here.
+ */
+function realpathOrLexical(p: string): string {
+  try {
+    return realpathSync(p);
+  } catch {
+    return p;
+  }
 }
 
 export async function startMcpServer(opts: McpServerOptions = {}): Promise<void> {

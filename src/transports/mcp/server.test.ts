@@ -301,14 +301,11 @@ describe('MCP server — cwd whitelist enforcement', () => {
     expect(b.status).toBe('running');
   });
 
-  // SKIPPED in the test commit, enabled in the follow-up fix commit.
-  // BUG: resolveCwd() in server.ts normalizes with path.resolve only — it does
-  // NOT call fs.realpath — so a symlink physically located under a root but
-  // pointing outside it passes the prefix check, letting Claude spawn with a
-  // cwd outside every allowed root. PRD §7 ("Resolved ... then prefix-checked")
-  // and §11 ("Path-whitelist tests: ... symlinks") expect this to be rejected.
-  // The fix resolves the real path of both candidate and roots before checking.
-  it.skip('rejects a symlink inside a root that resolves outside every root', async () => {
+  // Regression: resolveCwd() must resolve the real path (fs.realpath) of both
+  // candidate and roots before the prefix check. A symlink physically located
+  // under a root but pointing outside it must NOT pass — otherwise Claude could
+  // spawn with a cwd outside every allowed root. (PRD §7 / §11.)
+  it('rejects a symlink inside a root that resolves outside every root', async () => {
     // A symlink physically located under rootA but pointing at `outside`.
     // path.resolve alone won't catch this — the whitelist must resolve the
     // real path (fs.realpath) before the prefix check.
