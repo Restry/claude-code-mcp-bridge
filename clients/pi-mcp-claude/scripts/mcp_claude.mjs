@@ -263,11 +263,56 @@ async function cmdSessions() {
   await client.close(); await transport.close?.();
 }
 
+async function cmdStatus() {
+  const taskId = rest.find((a) => !a.startsWith('--'));
+  if (!taskId) die('status needs a task_id: mcp_claude.mjs status <task_id>');
+  const { client, transport } = await connect();
+  const s = unwrap(await client.callTool({ name: 'claude_status', arguments: { task_id: taskId } }));
+  if (wantJson) process.stdout.write(JSON.stringify(s, null, 2) + '\n');
+  else {
+    const c = s.counters || {};
+    process.stdout.write(`task ${s.taskId || taskId}  [${s.status}]  cwd=${s.cwd || '?'}\n`);
+    if (s.currentTool) process.stdout.write(`  in-flight tool: ${s.currentTool}\n`);
+    process.stdout.write(`  tools=${c.toolUses ?? 0} results=${c.toolResults ?? 0} tokens=${(c.inputTokens ?? 0)}/${(c.outputTokens ?? 0)} cost=$${(c.costUsd ?? 0)}\n`);
+    if (s.exitError) process.stdout.write(`  error: ${s.exitError}\n`);
+    process.stdout.write(`--- text so far ---\n${s.text || '(none yet)'}\n`);
+  }
+  await client.close(); await transport.close?.();
+}
+
+async function cmdWatch() {
+  const taskId = rest.find((a) => !a.startsWith('--'));
+  if (!taskId) die('watch needs a task_id: mcp_claude.mjs watch <task_id>');
+  let fromSeq = Number(flag('from-seq', '0'));
+  const { client, transport } = await connect();
+  let status = 'running';
+  while (true) {
+    const out = unwrap(await client.callTool({
+      name: 'claude_wait',
+      arguments: { task_id: taskId, from_seq: fromSeq, timeout_ms: 30000 },
+    }));
+    for (const rec of (out.events || [])) {
+      if (rec.seq > fromSeq) fromSeq = rec.seq;
+      const ev = rec.event || {};
+      if (ev.type === 'text' && !wantJson) process.stdout.write(ev.delta || '');
+      else if (ev.type === 'tool_use' && !wantJson) process.stderr.write(`\n[tool] ${ev.name}\n`);
+      else if (ev.type === 'error') process.stderr.write(`\n[error] ${ev.message}\n`);
+      else if (wantJson) process.stdout.write(JSON.stringify(rec) + '\n');
+    }
+    status = out.snapshot?.status || status;
+    if (status !== 'running') break;
+  }
+  process.stderr.write(`\n[watch] task ${taskId} terminal: ${status}\n`);
+  await client.close(); await transport.close?.();
+}
+
 switch (cmd) {
   case 'tools': await cmdTools(); break;
   case 'run': await cmdRun(); break;
   case 'dispatch': await cmdDispatch(); break;
   case 'sessions': await cmdSessions(); break;
+  case 'status': await cmdStatus(); break;
+  case 'watch': await cmdWatch(); break;
   default:
-    die('usage: mcp_claude.mjs <run|dispatch|sessions|tools> ...  (see header for flags)');
+    die('usage: mcp_claude.mjs <run|dispatch|status|watch|sessions|tools> ...  (see header for flags)');
 }
