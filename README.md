@@ -63,7 +63,7 @@ Cursor `mcpServers` block):
 
 | Tool | Signature | What it does |
 | --- | --- | --- |
-| `claude_run` | `(prompt, cwd?, model?, session_id?)` | Start a Claude task async. Returns a snapshot with `task_id`. |
+| `claude_run` | `(prompt, cwd?, model?, session_id?, notify_target?)` | Start a Claude task async. Returns a snapshot with `task_id`. |
 | `claude_status` | `(task_id)` | Snapshot: status, accumulated text, counters, in-flight tool. |
 | `claude_wait` | `(task_id, from_seq?, timeout_ms?)` | Block briefly for new events after `from_seq`; returns immediately on terminal state. |
 | `claude_cancel` | `(task_id)` | SIGTERM (then SIGKILL) a running task and mark it cancelled. |
@@ -80,6 +80,49 @@ Cursor `mcpServers` block):
   - `session_id` (string, optional) — resume a prior Claude session by its id
     (returned from a previous run). Resume is always by explicit id (`--resume`),
     never `-c`, so concurrent tasks sharing a cwd never cross-talk.
+  - `notify_target` (object, optional) — fire a one-shot notification when the
+    task reaches a terminal state (`done` / `error` / `cancelled`). See below.
+
+### Feishu notifications (`notify_target`)
+
+When a caller (e.g. an orchestrator that dispatched the task) wants to be told
+the moment a task finishes — instead of polling `claude_wait` — it passes a
+`notify_target`. On terminal state the bridge spawns the local `lark-cli`
+(resolved from `$PATH`, or `$LARK_CLI_BIN`) once with a Markdown summary. It is
+strictly fire-and-forget: a broken or missing `lark-cli` is logged to stderr and
+never crashes the server or blocks task cleanup. The existing four-field
+behaviour is unchanged when `notify_target` is omitted.
+
+`notify_target` fields (only `type` is required):
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `type` | `"feishu"` | Required. Only `feishu` is supported today. |
+| `chat_id` | string (`oc_…`) | Send to the main chat stream. Used when not replying into a thread. |
+| `anchor_msg_id` | string (`om_…`) | A message id anywhere in the target thread. **Required to land inside a thread** — the Feishu API can only reply-to-message, not send-to-thread. |
+| `reply_in_thread` | boolean | With `anchor_msg_id`, the notification appears inside that thread. |
+| `as_identity` | `"bot"` \| `"user"` | `lark-cli --as` flag. Defaults to `bot`. |
+| `notify_on_start` | boolean | Also fire immediately after spawn (a "派出了" pin). Default `false`. |
+
+Routing: an end notification uses `+messages-reply --reply-in-thread` when both
+`reply_in_thread` and `anchor_msg_id` are present; otherwise it falls back to
+`+messages-send --chat-id`. If neither a thread anchor nor a `chat_id` resolves,
+nothing is sent (logged as a warning).
+
+Example — reply into a thread when the task completes:
+
+```jsonc
+{
+  "prompt": "refactor the auth module",
+  "cwd": "/Users/me/Projects/app",
+  "notify_target": {
+    "type": "feishu",
+    "anchor_msg_id": "om_xxxxxxxxxxxxxxxx",
+    "reply_in_thread": true,
+    "notify_on_start": true
+  }
+}
+```
 
 - **`claude_wait`** — `from_seq` (default `0`) is an event cursor. Each event has
   a monotonic `seq`; pass the highest `seq` you've seen back as `from_seq` on the
