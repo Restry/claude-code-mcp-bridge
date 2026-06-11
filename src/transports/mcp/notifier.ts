@@ -9,6 +9,16 @@ export interface NotifyTarget {
   reply_in_thread?: boolean;
   as_identity?: 'bot' | 'user';
   notify_on_start?: boolean;
+  /**
+   * Which lark-cli credential store to notify from. lark-cli picks its config
+   * dir from HERMES_HOME, so different clients (Pi, Hermes) authenticate as
+   * different Feishu apps/bots. In a SHARED daemon the notifier runs in one
+   * process, so each task must carry the home of the identity that is actually
+   * a member of the target chat — otherwise Feishu rejects with 230002
+   * "Bot/User can NOT be out of the chat". When omitted, the daemon's own
+   * environment is used.
+   */
+  lark_home?: string;
 }
 
 const LARK_BIN = process.env.LARK_CLI_BIN ?? 'lark-cli';
@@ -42,7 +52,7 @@ export async function fireFeishuNotification(
   }
   args.push('--as', asWho, '--markdown', content);
 
-  await runLarkCli(args).catch((err) => {
+  await runLarkCli(args, target.lark_home).catch((err) => {
     log.warn('notifier', 'lark-cli-failed', {
       err: err instanceof Error ? err.message : String(err),
       taskId: snapshot.taskId,
@@ -113,11 +123,12 @@ function truncate(s: string, n: number): string {
   return s.length <= n ? s : s.slice(0, n) + '…';
 }
 
-function runLarkCli(args: string[]): Promise<void> {
+function runLarkCli(args: string[], larkHome?: string): Promise<void> {
   return new Promise((resolve, reject) => {
+    const env = larkHome ? { ...process.env, HERMES_HOME: larkHome } : process.env;
     const child = spawn(LARK_BIN, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
-      env: process.env,
+      env,
     });
     let stderr = '';
     child.stderr.on('data', (c: Buffer) => {

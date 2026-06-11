@@ -79,6 +79,11 @@ const TOOL_DEFINITIONS = [
               description:
                 'When true, also fire a notification immediately after task spawn with the task_id (useful for "派出了" 提示). Default false.',
             },
+            lark_home: {
+              type: 'string',
+              description:
+                'Optional. Path to the lark-cli credential store (HERMES_HOME) the notification should authenticate from. Needed when the bridge runs as a SHARED daemon and the calling client\'s Feishu bot differs from the daemon\'s default identity — pass your own HERMES_HOME so the notification is sent by a bot that is a member of the target chat.',
+            },
           },
           required: ['type'],
           additionalProperties: false,
@@ -207,6 +212,7 @@ function parseNotifyTarget(raw: unknown): NotifyTarget | undefined {
   if (typeof o.reply_in_thread === 'boolean') target.reply_in_thread = o.reply_in_thread;
   if (o.as_identity === 'bot' || o.as_identity === 'user') target.as_identity = o.as_identity;
   if (typeof o.notify_on_start === 'boolean') target.notify_on_start = o.notify_on_start;
+  if (typeof o.lark_home === 'string') target.lark_home = o.lark_home;
   return target;
 }
 
