@@ -37,6 +37,10 @@ export interface TaskSnapshot {
 
 interface InternalTask {
   snapshot: TaskSnapshot;
+  /** The prompt this run was started with (forwarded to the session store). */
+  prompt: string;
+  /** Whether we've already reported this session id to onSession once. */
+  sessionReported: boolean;
   events: TaskEventRecord[];
   /** Monotonic across the task's lifetime — survives buffer truncation. */
   nextSeq: number;
@@ -74,7 +78,16 @@ const MAX_EVENT_BUFFER = 5000;
 export class TaskRegistry {
   private readonly tasks = new Map<string, InternalTask>();
 
-  constructor(private readonly adapter: AgentAdapter) {}
+  /**
+   * @param adapter   the agent adapter (Claude CLI).
+   * @param onSession  optional hook fired when a task's session_id is first
+   *   learned and again on terminal state. Lets a caller persist sessions into
+   *   a durable store without coupling this registry to the store itself.
+   */
+  constructor(
+    private readonly adapter: AgentAdapter,
+    private readonly onSession?: (snapshot: TaskSnapshot, prompt: string) => void,
+  ) {}
 
   start(opts: AgentRunOptions & { notifyTarget?: NotifyTarget }): TaskSnapshot {
     const taskId = randomUUID();
@@ -94,6 +107,8 @@ export class TaskRegistry {
 
     const task: InternalTask = {
       snapshot,
+      prompt: opts.prompt,
+      sessionReported: false,
       events: [],
       nextSeq: 0,
       oldestSeq: 0,
@@ -103,6 +118,12 @@ export class TaskRegistry {
       finished: Promise.resolve(),
     };
     this.tasks.set(taskId, task);
+
+    // Resume case: session_id is known at start, so register it right away.
+    if (snapshot.sessionId && !task.sessionReported) {
+      task.sessionReported = true;
+      this.onSession?.(snapshot, task.prompt);
+    }
 
     task.finished = this.consumeEvents(task);
 
@@ -194,6 +215,8 @@ export class TaskRegistry {
         /* ignore */
       }
       task.snapshot.endedAt = Date.now();
+      // Persist the final session state (status, text, error) before notifying.
+      this.onSession?.(task.snapshot, task.prompt);
       // One-shot terminal notification. Fire-and-forget: the task is already
       // done, so we don't gate cleanup on the notifier — but await it so the
       // spawned lark-cli isn't orphaned if the process is about to exit.
@@ -216,6 +239,12 @@ export class TaskRegistry {
       task.oldestSeq = task.events[0]?.seq ?? task.nextSeq;
     }
     this.updateSnapshot(task, event);
+    // First time we learn the session id mid-run, register it so a long task
+    // shows up as 'running' in the durable store before it ever finishes.
+    if (event.type === 'system' && task.snapshot.sessionId && !task.sessionReported) {
+      task.sessionReported = true;
+      this.onSession?.(task.snapshot, task.prompt);
+    }
     this.flushWaiters(task);
   }
 

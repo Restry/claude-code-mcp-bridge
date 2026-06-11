@@ -167,7 +167,7 @@ afterEach(async () => {
 });
 
 describe('MCP server — tool registration', () => {
-  it('lists exactly the six claude_* tools with input schemas', async () => {
+  it('lists the claude_* tools with input schemas', async () => {
     const { client } = await connect({});
     const { tools } = await client.listTools();
     const names = tools.map((t) => t.name).sort();
@@ -177,6 +177,9 @@ describe('MCP server — tool registration', () => {
         'claude_forget',
         'claude_list',
         'claude_run',
+        'claude_session_forget',
+        'claude_session_get',
+        'claude_sessions',
         'claude_status',
         'claude_wait',
       ].sort(),
@@ -429,5 +432,61 @@ describe('MCP server — cwd whitelist enforcement', () => {
     await expect(
       callTool(client, 'claude_run', { prompt: 'p', cwd: link }),
     ).rejects.toThrow(/outside the allowed roots/);
+  });
+});
+
+describe('MCP server — durable sessions', () => {
+  let storeFile: string;
+  beforeEach(() => {
+    const dir = mkdtempSync(join(tmpdir(), 'srv-sess-'));
+    storeFile = join(dir, 'sessions.json');
+  });
+
+  async function drainToTerminal(client: Client, taskId: string) {
+    let fromSeq = 0;
+    for (let i = 0; i < 50; i++) {
+      const out = parse(await callTool(client, 'claude_wait', { task_id: taskId, from_seq: fromSeq, timeout_ms: 200 }));
+      for (const e of out.events) if (e.seq > fromSeq) fromSeq = e.seq;
+      if (out.snapshot.status !== 'running') return out.snapshot;
+    }
+    throw new Error('task never reached terminal');
+  }
+
+  it('records a finished run in claude_sessions and persists to disk', async () => {
+    const { client, adapter } = await connect({ sessionStorePath: storeFile });
+    const started = parse(await callTool(client, 'claude_run', { prompt: 'do a thing', cwd: tmpdir() }));
+
+    const run = adapter.runs[0];
+    run.push({ type: 'system', sessionId: 'sess-1', model: 'claude-x' });
+    run.push({ type: 'text', delta: 'all done' });
+    run.end();
+    await drainToTerminal(client, started.task_id);
+
+    const sessions = parse(await callTool(client, 'claude_sessions', {})).sessions;
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].session_id).toBe('sess-1');
+    expect(sessions[0].status).toBe('done');
+    expect(sessions[0].run_count).toBe(1);
+    expect(sessions[0].last_prompt).toBe('do a thing');
+
+    // A fresh server pointed at the same file sees the session (durability).
+    const { client: client2 } = await connect({ sessionStorePath: storeFile });
+    const got = parse(await callTool(client2, 'claude_session_get', { session_id: 'sess-1' }));
+    expect(got.session_id).toBe('sess-1');
+    expect(got.last_text_excerpt).toBe('all done');
+  });
+
+  it('claude_session_get throws on unknown id; claude_session_forget drops it', async () => {
+    const { client, adapter } = await connect({ sessionStorePath: storeFile });
+    await expect(callTool(client, 'claude_session_get', { session_id: 'nope' })).rejects.toThrow(/unknown session_id/);
+
+    const started = parse(await callTool(client, 'claude_run', { prompt: 'p', cwd: tmpdir() }));
+    const run = adapter.runs[0];
+    run.push({ type: 'system', sessionId: 'sess-x' });
+    run.end();
+    await drainToTerminal(client, started.task_id);
+
+    expect(parse(await callTool(client, 'claude_session_forget', { session_id: 'sess-x' })).forgotten).toBe(true);
+    expect(parse(await callTool(client, 'claude_sessions', {})).sessions).toHaveLength(0);
   });
 });

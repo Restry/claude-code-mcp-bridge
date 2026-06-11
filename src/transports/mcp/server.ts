@@ -8,6 +8,7 @@ import { realpathSync } from 'node:fs';
 import { resolve as resolvePath, sep as pathSep } from 'node:path';
 import { ClaudeAdapter } from '../../agent/claude/adapter';
 import { TaskRegistry, type TaskEventRecord, type TaskSnapshot } from './task-registry';
+import { SessionStore } from './session-store';
 import type { NotifyTarget } from './notifier';
 
 export interface McpServerOptions {
@@ -21,6 +22,12 @@ export interface McpServerOptions {
    * Default false (back-compat: existing bridges keep accepting bare calls).
    */
   requireNotifyTarget?: boolean;
+  /**
+   * Path to the durable session store JSON file. When omitted, sessions are
+   * tracked in memory only (lost on restart). The CLI defaults this to
+   * ~/.claude-code-mcp-bridge/sessions.json.
+   */
+  sessionStorePath?: string;
 }
 
 const TOOL_DEFINITIONS = [
@@ -131,6 +138,32 @@ const TOOL_DEFINITIONS = [
       additionalProperties: false,
     },
   },
+  {
+    name: 'claude_sessions',
+    description:
+      'List durable Claude sessions known to this bridge (persisted across restarts and shared across MCP clients). Each entry has session_id, status of the last run, cwd, model, run_count, timestamps, and prompt/text excerpts. Use a session_id with claude_run(session_id=...) to resume.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'claude_session_get',
+    description: 'Get one durable session record by its session_id.',
+    inputSchema: {
+      type: 'object',
+      properties: { session_id: { type: 'string' } },
+      required: ['session_id'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'claude_session_forget',
+    description: 'Drop a session record from the durable store. Does not affect the underlying claude session on disk.',
+    inputSchema: {
+      type: 'object',
+      properties: { session_id: { type: 'string' } },
+      required: ['session_id'],
+      additionalProperties: false,
+    },
+  },
 ] as const;
 
 function jsonResult(value: unknown) {
@@ -214,7 +247,10 @@ function realpathOrLexical(p: string): string {
 
 export async function startMcpServer(opts: McpServerOptions = {}): Promise<void> {
   const adapter = new ClaudeAdapter();
-  const registry = new TaskRegistry(adapter);
+  const sessionStore = new SessionStore(opts.sessionStorePath);
+  const registry = new TaskRegistry(adapter, (snapshot, prompt) =>
+    sessionStore.upsert(snapshot, prompt),
+  );
 
   const server = new Server(
     { name: 'claude-code-bridge', version: '0.1.0' },
@@ -302,6 +338,20 @@ export async function startMcpServer(opts: McpServerOptions = {}): Promise<void>
         const id = String(args.task_id ?? '');
         const ok = registry.forget(id);
         return jsonResult({ task_id: id, forgotten: ok });
+      }
+      case 'claude_sessions': {
+        return jsonResult({ sessions: sessionStore.list() });
+      }
+      case 'claude_session_get': {
+        const id = String(args.session_id ?? '');
+        const rec = sessionStore.get(id);
+        if (!rec) throw new Error(`unknown session_id: ${id}`);
+        return jsonResult(rec);
+      }
+      case 'claude_session_forget': {
+        const id = String(args.session_id ?? '');
+        const ok = sessionStore.forget(id);
+        return jsonResult({ session_id: id, forgotten: ok });
       }
       default:
         throw new Error(`unknown tool: ${req.params.name}`);

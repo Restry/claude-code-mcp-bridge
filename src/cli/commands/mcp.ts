@@ -4,6 +4,7 @@ export interface RunMcpOptions {
   cwd?: string;
   cwdRoot?: string[];
   requireNotifyTarget?: boolean;
+  sessionStorePath?: string;
 }
 
 export async function runMcp(opts: RunMcpOptions): Promise<void> {
@@ -15,5 +16,6 @@ export async function runMcp(opts: RunMcpOptions): Promise<void> {
     defaultCwd: opts.cwd,
     cwdRoots: opts.cwdRoot && opts.cwdRoot.length > 0 ? opts.cwdRoot : undefined,
     requireNotifyTarget: opts.requireNotifyTarget,
+    sessionStorePath: opts.sessionStorePath,
   });
 }

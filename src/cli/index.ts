@@ -6,6 +6,7 @@ import pkg from '../../package.json';
 import { runMcp } from './commands/mcp';
 
 const DEFAULT_CWD_ROOT = join(homedir(), 'Projects');
+const DEFAULT_SESSION_STORE = join(homedir(), '.claude-code-mcp-bridge', 'sessions.json');
 
 const program = new Command();
 
@@ -32,9 +33,15 @@ program
     'reject claude_run calls that omit notify_target (forces callers to wire up end-of-task notifications)',
     false,
   )
-  .action(async (opts: { cwd?: string; cwdRoot: string[]; requireNotifyTarget?: boolean }) => {
+  .option(
+    '--session-store <path>',
+    'path to the durable session registry JSON file. Defaults to ~/.claude-code-mcp-bridge/sessions.json. Pass "none" to disable persistence.',
+    DEFAULT_SESSION_STORE,
+  )
+  .action(async (opts: { cwd?: string; cwdRoot: string[]; requireNotifyTarget?: boolean; sessionStore: string }) => {
     const cwdRoot = opts.cwdRoot.length > 0 ? opts.cwdRoot : [DEFAULT_CWD_ROOT];
-    await runMcp({ cwd: opts.cwd, cwdRoot, requireNotifyTarget: opts.requireNotifyTarget });
+    const sessionStorePath = opts.sessionStore === 'none' ? undefined : opts.sessionStore;
+    await runMcp({ cwd: opts.cwd, cwdRoot, requireNotifyTarget: opts.requireNotifyTarget, sessionStorePath });
   });
 
 program.parseAsync(process.argv).catch((err) => {
