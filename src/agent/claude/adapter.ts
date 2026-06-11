@@ -7,6 +7,13 @@ import type { AgentAdapter, AgentEvent, AgentRun, AgentRunOptions } from '../typ
 import { translateEvent } from './stream-json';
 
 export interface ClaudeAdapterOptions {
+  /**
+   * Path to the `claude` binary. Resolution order:
+   *   1. explicit `opts.binary`
+   *   2. `CLAUDE_BIN` env var (absolute path; useful when the parent process
+   *      can't see the user's interactive PATH — nvm / pnpm / volta installs)
+   *   3. bare `'claude'` — relies on PATH
+   */
   binary?: string;
 }
 
@@ -19,7 +26,7 @@ export class ClaudeAdapter implements AgentAdapter {
   private readonly binary: string;
 
   constructor(opts: ClaudeAdapterOptions = {}) {
-    this.binary = opts.binary ?? 'claude';
+    this.binary = opts.binary ?? process.env.CLAUDE_BIN ?? 'claude';
   }
 
   async isAvailable(): Promise<boolean> {

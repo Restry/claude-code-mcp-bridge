@@ -118,6 +118,31 @@ describe('ClaudeAdapter.run — argv construction', () => {
     expect(valueAfter(spawnArgs(), '--model')).toBe('claude-opus-4-8');
   });
 
+  it('binary resolves: explicit > CLAUDE_BIN env > default "claude"', () => {
+    const orig = process.env.CLAUDE_BIN;
+    try {
+      // 1. no env, no opts → defaults to bare 'claude' (PATH lookup)
+      delete process.env.CLAUDE_BIN;
+      new ClaudeAdapter().run({ prompt: 'p' });
+      expect(spawnMock.mock.calls[0]![0]).toBe('claude');
+
+      // 2. CLAUDE_BIN env wins over the default
+      spawnMock.mockClear();
+      process.env.CLAUDE_BIN = '/opt/nvm/bin/claude';
+      new ClaudeAdapter().run({ prompt: 'p' });
+      expect(spawnMock.mock.calls[0]![0]).toBe('/opt/nvm/bin/claude');
+
+      // 3. explicit opts.binary wins over env
+      spawnMock.mockClear();
+      process.env.CLAUDE_BIN = '/opt/nvm/bin/claude';
+      new ClaudeAdapter({ binary: '/usr/local/bin/claude-custom' }).run({ prompt: 'p' });
+      expect(spawnMock.mock.calls[0]![0]).toBe('/usr/local/bin/claude-custom');
+    } finally {
+      if (orig === undefined) delete process.env.CLAUDE_BIN;
+      else process.env.CLAUDE_BIN = orig;
+    }
+  });
+
   it('with appendSystemPrompt passes the flag; null/undefined skip it', () => {
     new ClaudeAdapter().run({ prompt: 'p', appendSystemPrompt: 'be terse' });
     expect(valueAfter(spawnArgs(0), '--append-system-prompt')).toBe('be terse');
