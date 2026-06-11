@@ -456,7 +456,7 @@ describe('MCP server — durable sessions', () => {
     const { client, adapter } = await connect({ sessionStorePath: storeFile });
     const started = parse(await callTool(client, 'claude_run', { prompt: 'do a thing', cwd: tmpdir() }));
 
-    const run = adapter.runs[0];
+    const run = adapter.runs[0]!;
     run.push({ type: 'system', sessionId: 'sess-1', model: 'claude-x' });
     run.push({ type: 'text', delta: 'all done' });
     run.end();
@@ -481,7 +481,7 @@ describe('MCP server — durable sessions', () => {
     await expect(callTool(client, 'claude_session_get', { session_id: 'nope' })).rejects.toThrow(/unknown session_id/);
 
     const started = parse(await callTool(client, 'claude_run', { prompt: 'p', cwd: tmpdir() }));
-    const run = adapter.runs[0];
+    const run = adapter.runs[0]!;
     run.push({ type: 'system', sessionId: 'sess-x' });
     run.end();
     await drainToTerminal(client, started.task_id);

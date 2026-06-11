@@ -172,7 +172,7 @@ function jsonResult(value: unknown) {
   };
 }
 
-function snapshotToWire(s: TaskSnapshot) {
+export function snapshotToWire(s: TaskSnapshot) {
   return {
     task_id: s.taskId,
     status: s.status,
@@ -252,6 +252,33 @@ export async function startMcpServer(opts: McpServerOptions = {}): Promise<void>
     sessionStore.upsert(snapshot, prompt),
   );
 
+  const server = buildServer(registry, sessionStore, opts);
+
+  const shutdown = async () => {
+    try {
+      await registry.shutdown();
+    } finally {
+      process.exit(0);
+    }
+  };
+  process.once('SIGINT', shutdown);
+  process.once('SIGTERM', shutdown);
+
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}
+
+/**
+ * Build a Server with all claude_* tool handlers wired to a given registry and
+ * session store. Both the stdio entrypoint and the HTTP transport reuse this,
+ * so over HTTP every MCP session shares ONE registry + ONE session store —
+ * which is what makes tasks and sessions globally visible across clients.
+ */
+export function buildServer(
+  registry: TaskRegistry,
+  sessionStore: SessionStore,
+  opts: McpServerOptions = {},
+): Server {
   const server = new Server(
     { name: 'claude-code-bridge', version: '0.1.0' },
     { capabilities: { tools: {} } },
@@ -358,16 +385,5 @@ export async function startMcpServer(opts: McpServerOptions = {}): Promise<void>
     }
   });
 
-  const shutdown = async () => {
-    try {
-      await registry.shutdown();
-    } finally {
-      process.exit(0);
-    }
-  };
-  process.once('SIGINT', shutdown);
-  process.once('SIGTERM', shutdown);
-
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+  return server;
 }

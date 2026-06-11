@@ -29,6 +29,27 @@ Or, once published:
 npx claude-code-mcp-bridge mcp
 ```
 
+## HTTP mode (shared, long-lived daemon)
+
+`mcp` (stdio) is one-process-per-client. For a single long-lived server that
+**every** MCP client shares — and a status page — use `serve`:
+
+```bash
+node bin/claude-code-mcp-bridge.mjs serve --port 8787 --cwd-root ~/projects
+```
+
+- MCP endpoint (Streamable HTTP): `http://127.0.0.1:8787/mcp`. Point any client's
+  `mcpServers` at it with `{ "type": "streamable-http", "url": "http://127.0.0.1:8787/mcp" }`.
+- All MCP sessions share **one** task registry and **one** session store, so
+  `claude_list` / `claude_sessions` are globally visible across clients.
+- Dashboard: open `http://127.0.0.1:8787/` — a brief usage intro plus a live
+  panel of sessions / tasks / in-progress status (polls `GET /api/state`).
+- `GET /api/state` returns that state as JSON; `GET /healthz` is a liveness probe.
+
+Run it as a system-managed daemon (macOS launchd) so it's not started by any
+client — see [`deploy/com.restry.claude-code-mcp-bridge.plist`](deploy/com.restry.claude-code-mcp-bridge.plist)
+(edit paths, copy to `~/Library/LaunchAgents/`, `launchctl load -w ...`).
+
 The `claude` CLI must be installed and on `PATH` (the adapter spawns
 `claude --version` to check availability and `claude -p ... --output-format
 stream-json` to run tasks).

@@ -1,0 +1,29 @@
+flowchart TB
+  subgraph A["① stdio 模式（现状）—— 一对一，谁用谁起"]
+    direction TB
+    pi1["Pi"] -->|spawn 并独占管道| b1["bridge 进程 #1"]
+    he1["Hermes"] -->|spawn 并独占管道| b2["bridge 进程 #2"]
+    b1 -.各自一份内存/任务表.- b2
+  end
+
+  subgraph B["② HTTP 模式（目标）—— 共享，系统常驻"]
+    direction TB
+    lad["launchd 拉起<br/>常驻 bridge 守护进程"]
+    pi2["Pi"] -->|HTTP 连接| lad
+    he2["Hermes"] -->|HTTP 连接| lad
+    lad --> one["唯一一份<br/>任务表 + 会话表"]
+  end
+
+  A --> L
+  B --> L
+  subgraph L["底层：bridge → claude（两种模式都一样）"]
+    direction LR
+    cc["claude -p<br/>一次性跑完即退"] <-->|--resume session_id| disk[("会话存磁盘<br/>sessions.json")]
+  end
+
+  classDef now fill:#fde8e8,stroke:#e25555,color:#7a1f1f;
+  classDef goal fill:#e6f4ea,stroke:#34a853,color:#14532d;
+  classDef base fill:#e8f0fe,stroke:#4285f4,color:#1a3a6b;
+  class A,pi1,he1,b1,b2 now;
+  class B,lad,pi2,he2,one goal;
+  class L,cc,disk base;
