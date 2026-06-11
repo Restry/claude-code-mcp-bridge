@@ -17,6 +17,7 @@ import type { AgentEvent, AgentRun } from '../../agent/types';
 const h = vi.hoisted(() => ({
   serverTransport: null as unknown,
   mockAdapter: null as unknown,
+  notifyCalls: [] as Array<{ target: unknown; kind: string; status: string }>,
 }));
 
 vi.mock('@modelcontextprotocol/sdk/server/stdio.js', () => ({
@@ -33,6 +34,13 @@ vi.mock('../../agent/claude/adapter', () => ({
       return h.mockAdapter as object;
     }
   },
+}));
+
+// Swap the real notifier so no lark-cli subprocess is ever spawned; record calls.
+vi.mock('./notifier', () => ({
+  fireFeishuNotification: vi.fn(async (target: unknown, snapshot: { status: string }, kind: string) => {
+    h.notifyCalls.push({ target, kind, status: snapshot.status });
+  }),
 }));
 
 import { startMcpServer, type McpServerOptions } from './server';
@@ -155,6 +163,7 @@ async function callTool(client: Client, name: string, args: Record<string, unkno
 afterEach(async () => {
   for (const r of openRuns.splice(0)) r.end();
   for (const c of openClients.splice(0)) await c.close().catch(() => {});
+  h.notifyCalls.length = 0;
 });
 
 describe('MCP server — tool registration', () => {
@@ -174,6 +183,56 @@ describe('MCP server — tool registration', () => {
     );
     const run = tools.find((t) => t.name === 'claude_run')!;
     expect(run.inputSchema.required).toContain('prompt');
+    // notify_target is additive and optional — present in properties, not required.
+    const props = run.inputSchema.properties as Record<string, unknown>;
+    expect(props.notify_target).toBeDefined();
+    expect(run.inputSchema.required).not.toContain('notify_target');
+  });
+});
+
+describe('MCP server — notify_target', () => {
+  it('claude_run accepts notify_target without a schema error', async () => {
+    const { client } = await connect({});
+    const started = parse(
+      await callTool(client, 'claude_run', {
+        prompt: 'hi',
+        notify_target: { type: 'feishu', chat_id: 'oc_xyz', notify_on_start: true },
+      }),
+    );
+    expect(started.status).toBe('running');
+    // notify_on_start fires a 'start' notification synchronously during start().
+    expect(h.notifyCalls.some((c) => c.kind === 'start')).toBe(true);
+  });
+
+  it('fires an end notification when the task reaches a terminal state', async () => {
+    const { client, adapter } = await connect({});
+    const started = parse(
+      await callTool(client, 'claude_run', {
+        prompt: 'hi',
+        notify_target: { type: 'feishu', anchor_msg_id: 'om_abc', reply_in_thread: true },
+      }),
+    );
+    const taskId = started.task_id as string;
+    const run = adapter.runs[0]!;
+    run.push({ type: 'done', sessionId: 's' });
+    run.end();
+    // Drain to terminal so consumeEvents' finally runs.
+    await callTool(client, 'claude_wait', { task_id: taskId, from_seq: -1, timeout_ms: 1000 });
+
+    const endCall = h.notifyCalls.find((c) => c.kind === 'end');
+    expect(endCall).toBeDefined();
+    expect(endCall!.status).toBe('done');
+  });
+
+  it('does not notify when no notify_target is given', async () => {
+    const { client, adapter } = await connect({});
+    const started = parse(await callTool(client, 'claude_run', { prompt: 'hi' }));
+    const taskId = started.task_id as string;
+    const run = adapter.runs[0]!;
+    run.push({ type: 'done', sessionId: 's' });
+    run.end();
+    await callTool(client, 'claude_wait', { task_id: taskId, from_seq: -1, timeout_ms: 1000 });
+    expect(h.notifyCalls).toHaveLength(0);
   });
 });
 

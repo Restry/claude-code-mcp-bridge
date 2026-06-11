@@ -8,6 +8,7 @@ import { realpathSync } from 'node:fs';
 import { resolve as resolvePath, sep as pathSep } from 'node:path';
 import { ClaudeAdapter } from '../../agent/claude/adapter';
 import { TaskRegistry, type TaskEventRecord, type TaskSnapshot } from './task-registry';
+import type { NotifyTarget } from './notifier';
 
 export interface McpServerOptions {
   /** Default cwd applied when the caller does not specify one. */
@@ -34,6 +35,41 @@ const TOOL_DEFINITIONS = [
           description: 'Resume a prior Claude session (its session_id from a previous run).',
         },
         model: { type: 'string', description: 'Override the Claude model (e.g. claude-opus-4-7).' },
+        notify_target: {
+          type: 'object',
+          description:
+            'Optional. When the task reaches a terminal state (done/error/cancelled), bridge will fire a one-shot notification. Currently supports type="feishu".',
+          properties: {
+            type: { type: 'string', enum: ['feishu'] },
+            chat_id: {
+              type: 'string',
+              description:
+                'Feishu chat_id (oc_xxx). Used when reply_in_thread is false or no anchor_msg_id provided.',
+            },
+            anchor_msg_id: {
+              type: 'string',
+              description:
+                'Feishu message_id (om_xxx) anywhere in the target thread. REQUIRED to reply into a thread, because Feishu API can only reply-to-message, not send-to-thread.',
+            },
+            reply_in_thread: {
+              type: 'boolean',
+              description:
+                'When true and anchor_msg_id given, the notification appears inside that thread. When false, notification goes to the main chat stream via chat_id.',
+            },
+            as_identity: {
+              type: 'string',
+              enum: ['bot', 'user'],
+              description: 'lark-cli --as flag. Defaults to "bot".',
+            },
+            notify_on_start: {
+              type: 'boolean',
+              description:
+                'When true, also fire a notification immediately after task spawn with the task_id (useful for "派出了" 提示). Default false.',
+            },
+          },
+          required: ['type'],
+          additionalProperties: false,
+        },
       },
       required: ['prompt'],
       additionalProperties: false,
@@ -117,6 +153,24 @@ function recordsToWire(records: TaskEventRecord[]) {
   return records.map((r) => ({ seq: r.seq, ts: r.ts, event: r.event }));
 }
 
+/**
+ * Parse the opaque `notify_target` arg into a NotifyTarget. Returns undefined
+ * when absent or malformed (notifications are best-effort, never required), so
+ * a bad target never blocks the task from starting.
+ */
+function parseNotifyTarget(raw: unknown): NotifyTarget | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const o = raw as Record<string, unknown>;
+  if (o.type !== 'feishu') return undefined;
+  const target: NotifyTarget = { type: 'feishu' };
+  if (typeof o.chat_id === 'string') target.chat_id = o.chat_id;
+  if (typeof o.anchor_msg_id === 'string') target.anchor_msg_id = o.anchor_msg_id;
+  if (typeof o.reply_in_thread === 'boolean') target.reply_in_thread = o.reply_in_thread;
+  if (o.as_identity === 'bot' || o.as_identity === 'user') target.as_identity = o.as_identity;
+  if (typeof o.notify_on_start === 'boolean') target.notify_on_start = o.notify_on_start;
+  return target;
+}
+
 function resolveCwd(opts: McpServerOptions, requested?: string): string {
   const raw = requested?.trim() || opts.defaultCwd?.trim() || process.cwd();
   // Normalize ./.. away, THEN resolve symlinks. path.resolve alone is purely
@@ -174,6 +228,7 @@ export async function startMcpServer(opts: McpServerOptions = {}): Promise<void>
         const cwd = resolveCwd(opts, typeof args.cwd === 'string' ? args.cwd : undefined);
         const sessionId = typeof args.session_id === 'string' ? args.session_id : undefined;
         const model = typeof args.model === 'string' ? args.model : undefined;
+        const notifyTarget = parseNotifyTarget(args.notify_target);
         const snap = registry.start({
           prompt,
           cwd,
@@ -181,6 +236,7 @@ export async function startMcpServer(opts: McpServerOptions = {}): Promise<void>
           model,
           permissionMode: 'bypassPermissions',
           appendSystemPrompt: null,
+          notifyTarget,
         });
         return jsonResult(snapshotToWire(snap));
       }

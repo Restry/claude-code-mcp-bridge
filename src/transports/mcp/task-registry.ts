@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { AgentAdapter, AgentEvent, AgentRun, AgentRunOptions } from '../../agent/types';
+import { fireFeishuNotification, type NotifyTarget } from './notifier';
 
 export type TaskStatus = 'running' | 'done' | 'error' | 'cancelled';
 
@@ -42,6 +43,8 @@ interface InternalTask {
   /** Lowest seq still retained in `events` after trimming. */
   oldestSeq: number;
   run: AgentRun;
+  /** Optional one-shot notification target fired on terminal state. */
+  notifyTarget?: NotifyTarget;
   /** Resolves when consumeEvents() finishes draining the AsyncIterable. */
   finished: Promise<void>;
   /** Resolvers waiting on new events / completion (used by claude_wait). */
@@ -73,9 +76,10 @@ export class TaskRegistry {
 
   constructor(private readonly adapter: AgentAdapter) {}
 
-  start(opts: AgentRunOptions): TaskSnapshot {
+  start(opts: AgentRunOptions & { notifyTarget?: NotifyTarget }): TaskSnapshot {
     const taskId = randomUUID();
-    const run = this.adapter.run(opts);
+    const { notifyTarget, ...runOpts } = opts;
+    const run = this.adapter.run(runOpts);
 
     const snapshot: TaskSnapshot = {
       taskId,
@@ -94,12 +98,19 @@ export class TaskRegistry {
       nextSeq: 0,
       oldestSeq: 0,
       run,
+      notifyTarget,
       waiters: [],
       finished: Promise.resolve(),
     };
     this.tasks.set(taskId, task);
 
     task.finished = this.consumeEvents(task);
+
+    // Fire-and-forget "task started" notification when requested.
+    if (notifyTarget?.notify_on_start === true) {
+      void fireFeishuNotification(notifyTarget, snapshot, 'start');
+    }
+
     return snapshot;
   }
 
@@ -183,6 +194,14 @@ export class TaskRegistry {
         /* ignore */
       }
       task.snapshot.endedAt = Date.now();
+      // One-shot terminal notification. Fire-and-forget: the task is already
+      // done, so we don't gate cleanup on the notifier — but await it so the
+      // spawned lark-cli isn't orphaned if the process is about to exit.
+      if (task.notifyTarget) {
+        await fireFeishuNotification(task.notifyTarget, task.snapshot, 'end').catch(() => {
+          /* fireFeishuNotification already logs; never let it break cleanup */
+        });
+      }
       this.flushWaiters(task);
     }
   }
