@@ -1,0 +1,166 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1700 1180" width="1700" height="1180">
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0 0 L10 4 L0 8 z" fill="#4746C6"/>
+    </marker>
+  </defs>
+
+  <!-- canvas: blush -->
+  <rect x="0" y="0" width="1700" height="1180" fill="#DDA8A2"/>
+
+  <!-- left cobalt edge bar -->
+  <rect x="0" y="0" width="56" height="1180" fill="#4746C6"/>
+
+  <!-- vertical word climbing the edge -->
+  <g transform="translate(36 1080) rotate(-90)">
+    <text x="0" y="0" font-size="56" font-weight="800" fill="#F4EFE9" letter-spacing="6">ASYNC · MCP · BRIDGE</text>
+  </g>
+
+  <!-- HERO: mega numeral + title -->
+  <text x="140" y="200" font-size="72" font-weight="900" fill="#171717" letter-spacing="-1">claude-code-mcp-bridge</text>
+  <text x="140" y="248" font-size="26" font-weight="600" fill="#171717">Async wrapper around the local claude CLI · stdio MCP server · 6 tools</text>
+
+  <!-- mega 6 -->
+  <text x="1420" y="290" font-size="320" font-weight="900" fill="#171717" letter-spacing="-12">6</text>
+  <rect x="1420" y="310" width="240" height="14" fill="#4746C6"/>
+  <text x="1420" y="358" font-size="22" font-weight="700" fill="#171717">TOOLS · ONE STDIO SERVER</text>
+
+  <!-- ============ ROW 1: CLIENT -> SERVER ============ -->
+  <!-- MCP CLIENT panel -->
+  <rect x="120" y="320" width="380" height="180" fill="#F4EFE9" stroke="#4746C6" stroke-width="4"/>
+  <text x="144" y="362" font-size="20" font-weight="800" fill="#171717">MCP CLIENT</text>
+  <rect x="144" y="372" width="80" height="3" fill="#4746C6"/>
+  <text x="144" y="406" font-size="18" fill="#171717">Hermes · Cursor · Claude Desktop</text>
+  <text x="144" y="434" font-size="18" fill="#171717">Any custom MCP agent</text>
+  <text x="144" y="468" font-size="15" fill="#171717" font-style="italic">spawns `npx @restry/claude-code-</text>
+  <text x="144" y="488" font-size="15" fill="#171717" font-style="italic">mcp-bridge mcp` over stdio</text>
+
+  <!-- arrow client -> server -->
+  <line x1="500" y1="410" x2="640" y2="410" stroke="#4746C6" stroke-width="4" marker-end="url(#arrow)"/>
+  <text x="510" y="395" font-size="14" font-weight="700" fill="#171717">JSON-RPC / stdio</text>
+
+  <!-- MCP SERVER panel -->
+  <rect x="640" y="320" width="640" height="320" fill="#F4EFE9" stroke="#4746C6" stroke-width="4"/>
+  <text x="664" y="362" font-size="20" font-weight="800" fill="#171717">MCP SERVER · transports/mcp/server.ts</text>
+  <rect x="664" y="372" width="120" height="3" fill="#4746C6"/>
+
+  <!-- 6 tool chips -->
+  <g font-size="15" font-weight="700" fill="#171717">
+    <rect x="664" y="394" width="180" height="42" fill="#DDA8A2" stroke="#4746C6" stroke-width="2"/>
+    <text x="674" y="421">claude_run</text>
+    <rect x="854" y="394" width="180" height="42" fill="#DDA8A2" stroke="#4746C6" stroke-width="2"/>
+    <text x="864" y="421">claude_status</text>
+    <rect x="1044" y="394" width="220" height="42" fill="#DDA8A2" stroke="#4746C6" stroke-width="2"/>
+    <text x="1054" y="421">claude_wait(from_seq)</text>
+
+    <rect x="664" y="446" width="180" height="42" fill="#DDA8A2" stroke="#4746C6" stroke-width="2"/>
+    <text x="674" y="473">claude_cancel</text>
+    <rect x="854" y="446" width="180" height="42" fill="#DDA8A2" stroke="#4746C6" stroke-width="2"/>
+    <text x="864" y="473">claude_list</text>
+    <rect x="1044" y="446" width="220" height="42" fill="#DDA8A2" stroke="#4746C6" stroke-width="2"/>
+    <text x="1054" y="473">claude_forget</text>
+  </g>
+
+  <!-- registry sub-panel -->
+  <rect x="664" y="510" width="600" height="110" fill="#CE968F" stroke="#4746C6" stroke-width="3"/>
+  <text x="684" y="542" font-size="18" font-weight="800" fill="#171717">TASK REGISTRY · task-registry.ts</text>
+  <text x="684" y="568" font-size="15" fill="#171717">In-memory map taskId → snapshot · monotonic seq · ring buffer · oldestSeq</text>
+  <text x="684" y="590" font-size="15" fill="#171717">Statuses: running → done | error | cancelled  (terminal sticky)</text>
+  <text x="684" y="610" font-size="13" font-style="italic" fill="#171717">No disk. No DB. Server exit ⇒ tasks gone (intentional — see NG1).</text>
+
+  <!-- arrow server -> adapter -->
+  <line x1="1280" y1="480" x2="1420" y2="480" stroke="#4746C6" stroke-width="4" marker-end="url(#arrow)"/>
+  <text x="1290" y="465" font-size="14" font-weight="700" fill="#171717">spawn</text>
+
+  <!-- ADAPTER panel -->
+  <rect x="1420" y="380" width="240" height="240" fill="#F4EFE9" stroke="#4746C6" stroke-width="4"/>
+  <text x="1440" y="418" font-size="18" font-weight="800" fill="#171717">CLAUDE ADAPTER</text>
+  <rect x="1440" y="426" width="60" height="3" fill="#4746C6"/>
+  <text x="1440" y="456" font-size="14" fill="#171717">agent/claude/adapter.ts</text>
+  <text x="1440" y="486" font-size="14" fill="#171717">• no shell, spawn(argv)</text>
+  <text x="1440" y="508" font-size="14" fill="#171717">• --output-format</text>
+  <text x="1460" y="528" font-size="14" fill="#171717">stream-json</text>
+  <text x="1440" y="552" font-size="14" fill="#171717">• --resume &lt;id&gt;</text>
+  <text x="1440" y="574" font-size="14" fill="#171717">  never `-c`</text>
+  <text x="1440" y="600" font-size="14" fill="#171717">• SIGTERM → SIGKILL</text>
+
+  <!-- arrow adapter -> claude cli -->
+  <line x1="1540" y1="640" x2="1540" y2="720" stroke="#4746C6" stroke-width="4" marker-end="url(#arrow)"/>
+
+  <!-- CLAUDE CLI -->
+  <rect x="1420" y="720" width="240" height="120" fill="#4746C6"/>
+  <text x="1440" y="760" font-size="22" font-weight="900" fill="#F4EFE9">claude CLI</text>
+  <text x="1440" y="790" font-size="14" fill="#F4EFE9">local binary on PATH</text>
+  <text x="1440" y="812" font-size="14" fill="#F4EFE9">auth via `claude login`</text>
+  <text x="1440" y="832" font-size="13" font-style="italic" fill="#F4EFE9">NDJSON stdout → parser</text>
+
+  <!-- ============ ROW 2: stream-json + events ============ -->
+  <!-- stream-json parser -->
+  <rect x="640" y="680" width="380" height="180" fill="#F4EFE9" stroke="#4746C6" stroke-width="4"/>
+  <text x="664" y="720" font-size="20" font-weight="800" fill="#171717">STREAM-JSON PARSER</text>
+  <rect x="664" y="730" width="100" height="3" fill="#4746C6"/>
+  <text x="664" y="762" font-size="15" fill="#171717">agent/claude/stream-json.ts</text>
+  <text x="664" y="788" font-size="14" fill="#171717">half-line buffering · typed AgentEvent</text>
+  <text x="664" y="812" font-size="14" fill="#171717">text · tool_use · tool_result · cost</text>
+  <text x="664" y="838" font-size="13" font-style="italic" fill="#171717">→ appended to snapshot, seq++</text>
+
+  <!-- arrow claude cli -> parser (long curved-ish: use polyline) -->
+  <polyline points="1420,800 1240,800 1240,770 1020,770" fill="none" stroke="#4746C6" stroke-width="4" marker-end="url(#arrow)"/>
+  <text x="1100" y="755" font-size="13" font-weight="700" fill="#171717">NDJSON</text>
+
+  <!-- arrow parser -> registry (up) -->
+  <line x1="830" y1="680" x2="830" y2="630" stroke="#4746C6" stroke-width="4" marker-end="url(#arrow)"/>
+  <text x="840" y="660" font-size="13" font-weight="700" fill="#171717">events + counters</text>
+
+  <!-- ============ ROW 3: client polling loop ============ -->
+  <rect x="120" y="680" width="380" height="180" fill="#F4EFE9" stroke="#4746C6" stroke-width="4"/>
+  <text x="144" y="720" font-size="20" font-weight="800" fill="#171717">ASYNC PROTOCOL</text>
+  <rect x="144" y="730" width="80" height="3" fill="#4746C6"/>
+  <text x="144" y="762" font-size="15" fill="#171717">1. claude_run → taskId (instant)</text>
+  <text x="144" y="788" font-size="15" fill="#171717">2. claude_wait(taskId, from_seq)</text>
+  <text x="160" y="810" font-size="14" font-style="italic" fill="#171717">blocks ≤ 30s · returns delta</text>
+  <text x="144" y="834" font-size="15" fill="#171717">3. resume w/ new highest seq</text>
+
+  <!-- arrow registry -> async loop (back to client) -->
+  <polyline points="664,565 540,565 540,720 500,720" fill="none" stroke="#4746C6" stroke-width="4" marker-end="url(#arrow)"/>
+  <text x="430" y="555" font-size="13" font-weight="700" fill="#171717">snapshot + events</text>
+
+  <!-- ============ FOOTER: guarantees row ============ -->
+  <g>
+    <rect x="120" y="920" width="360" height="200" fill="#F4EFE9" stroke="#4746C6" stroke-width="4"/>
+    <text x="140" y="958" font-size="18" font-weight="800" fill="#171717">SECURITY</text>
+    <rect x="140" y="966" width="50" height="3" fill="#4746C6"/>
+    <text x="140" y="996" font-size="14" fill="#171717">cwd whitelist (--cwd-root)</text>
+    <text x="140" y="1018" font-size="14" fill="#171717">path.resolve + symlink check</text>
+    <text x="140" y="1040" font-size="14" fill="#171717">no shell · no string interp</text>
+    <text x="140" y="1062" font-size="14" fill="#171717">no secrets · no net listener</text>
+    <text x="140" y="1090" font-size="13" font-style="italic" fill="#171717">default root: ~/Projects</text>
+
+    <rect x="500" y="920" width="360" height="200" fill="#F4EFE9" stroke="#4746C6" stroke-width="4"/>
+    <text x="520" y="958" font-size="18" font-weight="800" fill="#171717">CONCURRENCY</text>
+    <rect x="520" y="966" width="50" height="3" fill="#4746C6"/>
+    <text x="520" y="996" font-size="14" fill="#171717">N tasks in one process</text>
+    <text x="520" y="1018" font-size="14" fill="#171717">isolated per taskId / cwd</text>
+    <text x="520" y="1040" font-size="14" fill="#171717">resume by explicit session_id</text>
+    <text x="520" y="1062" font-size="14" fill="#171717">monotonic seq · no replay gap</text>
+    <text x="520" y="1090" font-size="13" font-style="italic" fill="#171717">ring-trim bounded buffer</text>
+
+    <rect x="880" y="920" width="400" height="200" fill="#F4EFE9" stroke="#4746C6" stroke-width="4"/>
+    <text x="900" y="958" font-size="18" font-weight="800" fill="#171717">LIFECYCLE</text>
+    <rect x="900" y="966" width="50" height="3" fill="#4746C6"/>
+    <text x="900" y="996" font-size="14" fill="#171717">running → done | error | cancelled</text>
+    <text x="900" y="1018" font-size="14" fill="#171717">terminal sticky · cleanup via</text>
+    <text x="918" y="1038" font-size="14" fill="#171717">claude_forget(taskId)</text>
+    <text x="900" y="1062" font-size="14" fill="#171717">server exit ⇒ all gone</text>
+    <text x="900" y="1090" font-size="13" font-style="italic" fill="#171717">in-memory by design (NG1)</text>
+
+    <rect x="1300" y="920" width="360" height="200" fill="#CE968F" stroke="#4746C6" stroke-width="4"/>
+    <text x="1320" y="958" font-size="18" font-weight="800" fill="#171717">v0.1 → ROADMAP</text>
+    <rect x="1320" y="966" width="50" height="3" fill="#4746C6"/>
+    <text x="1320" y="996" font-size="14" fill="#171717">v0.2 · test hardening</text>
+    <text x="1320" y="1018" font-size="14" fill="#171717">v0.3 · structured errors</text>
+    <text x="1320" y="1040" font-size="14" fill="#171717">       cancel grace · stdout cap</text>
+    <text x="1320" y="1062" font-size="14" fill="#171717">v1.0 · tool sigs frozen</text>
+    <text x="1320" y="1090" font-size="13" font-style="italic" fill="#171717">npm: @restry/claude-code-mcp-bridge</text>
+  </g>
+</svg>

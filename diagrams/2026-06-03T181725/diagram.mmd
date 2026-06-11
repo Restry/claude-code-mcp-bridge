@@ -1,0 +1,51 @@
+flowchart TB
+    subgraph Clients["MCP Clients"]
+        direction LR
+        C1["Cursor"]
+        C2["Claude Desktop"]
+        C3["Hermes / 自建 Agent"]
+    end
+
+    subgraph Bridge["claude-code-mcp-bridge (stdio MCP Server)"]
+        direction TB
+        CLI["bin / cli<br/>mcp 命令 + --cwd-root 白名单"]
+        Server["transports/mcp/server<br/>注册 6 个工具"]
+        Registry["task-registry<br/>task_id · 事件 seq · 状态机"]
+
+        subgraph Tools["6 个 MCP 工具"]
+            direction LR
+            T1["claude_run"]
+            T2["claude_status"]
+            T3["claude_wait"]
+            T4["claude_cancel"]
+            T5["claude_list"]
+            T6["claude_forget"]
+        end
+
+        Adapter["agent/claude/adapter<br/>spawn claude -p<br/>--output-format stream-json"]
+        Stream["agent/claude/stream-json<br/>NDJSON 解析 → 事件流"]
+    end
+
+    subgraph External["外部进程"]
+        Claude["claude CLI<br/>(本地 Anthropic Claude Code)"]
+    end
+
+    Clients -->|stdio JSON-RPC| CLI
+    CLI --> Server
+    Server --> Tools
+    Tools --> Registry
+    Registry --> Adapter
+    Adapter -->|spawn| Claude
+    Claude -->|stdout NDJSON| Stream
+    Stream -->|events seq++| Registry
+    Registry -.poll/wait.-> Tools
+
+    classDef client fill:#e3f2fd,stroke:#1976d2,color:#0d47a1
+    classDef bridge fill:#fff3e0,stroke:#f57c00,color:#e65100
+    classDef tool fill:#f3e5f5,stroke:#7b1fa2,color:#4a148c
+    classDef ext fill:#e8f5e9,stroke:#388e3c,color:#1b5e20
+
+    class C1,C2,C3 client
+    class CLI,Server,Registry,Adapter,Stream bridge
+    class T1,T2,T3,T4,T5,T6 tool
+    class Claude ext

@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1700 1180">
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="9" refY="4" orient="auto" markerUnits="strokeWidth">
+      <path d="M0 0 L10 4 L0 8 z" fill="#4746C6"/>
+    </marker>
+  </defs>
+
+  <!-- 画布 -->
+  <rect x="0" y="0" width="1700" height="1180" fill="#DDA8A2"/>
+
+  <!-- 左侧钴蓝边条 + 竖排文字 -->
+  <rect x="0" y="0" width="92" height="1180" fill="#4746C6"/>
+  <g transform="translate(58 1080) rotate(-90)">
+    <text x="0" y="0" font-size="78" font-weight="900" letter-spacing="20" fill="#F4EFE9">异步 MCP 桥</text>
+  </g>
+
+  <!-- 标题 -->
+  <text x="150" y="120" font-size="64" font-weight="900" fill="#171717" letter-spacing="-1">claude-code-mcp-bridge</text>
+  <text x="150" y="172" font-size="26" font-weight="700" fill="#171717" letter-spacing="4">异步 MCP 服务 · 包裹本地 claude CLI · 仅 stdio</text>
+  <line x1="150" y1="200" x2="980" y2="200" stroke="#4746C6" stroke-width="4"/>
+
+  <!-- 巨大数字 6 -->
+  <text x="1240" y="240" font-size="320" font-weight="900" fill="#171717" letter-spacing="-10">6</text>
+  <text x="1240" y="280" font-size="24" font-weight="700" fill="#171717" letter-spacing="6">个工具</text>
+  <line x1="1240" y1="298" x2="1480" y2="298" stroke="#4746C6" stroke-width="6"/>
+
+  <!-- 第一行：客户端 -->
+  <text x="150" y="270" font-size="22" font-weight="700" fill="#171717" letter-spacing="4">MCP 客户端</text>
+
+  <rect x="150" y="290" width="240" height="92" fill="#F4EFE9" stroke="#4746C6" stroke-width="4"/>
+  <text x="270" y="338" font-size="26" font-weight="800" fill="#171717" text-anchor="middle">Hermes</text>
+  <text x="270" y="366" font-size="16" font-weight="600" fill="#171717" text-anchor="middle">编排器</text>
+
+  <rect x="410" y="290" width="240" height="92" fill="#F4EFE9" stroke="#4746C6" stroke-width="4"/>
+  <text x="530" y="338" font-size="26" font-weight="800" fill="#171717" text-anchor="middle">Cursor</text>
+  <text x="530" y="366" font-size="16" font-weight="600" fill="#171717" text-anchor="middle">编辑器</text>
+
+  <rect x="670" y="290" width="290" height="92" fill="#F4EFE9" stroke="#4746C6" stroke-width="4"/>
+  <text x="815" y="338" font-size="26" font-weight="800" fill="#171717" text-anchor="middle">Claude Desktop</text>
+  <text x="815" y="366" font-size="16" font-weight="600" fill="#171717" text-anchor="middle">自定义 MCP 客户端</text>
+
+  <!-- 客户端到桥的箭头 -->
+  <line x1="270" y1="382" x2="270" y2="450" stroke="#4746C6" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="530" y1="382" x2="530" y2="450" stroke="#4746C6" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="815" y1="382" x2="815" y2="450" stroke="#4746C6" stroke-width="4" marker-end="url(#arrow)"/>
+  <text x="990" y="425" font-size="18" font-weight="800" fill="#171717" letter-spacing="2">stdio · JSON-RPC</text>
+
+  <!-- 第二行：桥本体 -->
+  <rect x="150" y="460" width="1390" height="380" fill="#F4EFE9" stroke="#4746C6" stroke-width="4"/>
+  <text x="170" y="498" font-size="28" font-weight="900" fill="#171717" letter-spacing="1">@restry/claude-code-mcp-bridge</text>
+  <text x="170" y="526" font-size="16" font-weight="700" fill="#171717" letter-spacing="3">MCP 服务 · stdio · 内存态 · 单进程</text>
+  <line x1="170" y1="540" x2="1520" y2="540" stroke="#4746C6" stroke-width="3"/>
+
+  <!-- 6 个工具方块 3x2 -->
+  <g font-size="22" font-weight="800" fill="#171717">
+    <rect x="170" y="566" width="200" height="78" fill="#DDA8A2" stroke="#4746C6" stroke-width="3"/>
+    <text x="270" y="600" text-anchor="middle">claude_run</text>
+    <text x="270" y="626" font-size="14" font-weight="600" text-anchor="middle">即发即返</text>
+
+    <rect x="390" y="566" width="200" height="78" fill="#DDA8A2" stroke="#4746C6" stroke-width="3"/>
+    <text x="490" y="600" text-anchor="middle">claude_status</text>
+    <text x="490" y="626" font-size="14" font-weight="600" text-anchor="middle">取快照 · 不阻塞</text>
+
+    <rect x="610" y="566" width="200" height="78" fill="#DDA8A2" stroke="#4746C6" stroke-width="3"/>
+    <text x="710" y="600" text-anchor="middle">claude_wait</text>
+    <text x="710" y="626" font-size="14" font-weight="600" text-anchor="middle">游标 · 超时</text>
+
+    <rect x="170" y="660" width="200" height="78" fill="#DDA8A2" stroke="#4746C6" stroke-width="3"/>
+    <text x="270" y="694" text-anchor="middle">claude_cancel</text>
+    <text x="270" y="720" font-size="14" font-weight="600" text-anchor="middle">SIGTERM → SIGKILL</text>
+
+    <rect x="390" y="660" width="200" height="78" fill="#DDA8A2" stroke="#4746C6" stroke-width="3"/>
+    <text x="490" y="694" text-anchor="middle">claude_list</text>
+    <text x="490" y="720" font-size="14" font-weight="600" text-anchor="middle">列出全部任务</text>
+
+    <rect x="610" y="660" width="200" height="78" fill="#DDA8A2" stroke="#4746C6" stroke-width="3"/>
+    <text x="710" y="694" text-anchor="middle">claude_forget</text>
+    <text x="710" y="720" font-size="14" font-weight="600" text-anchor="middle">丢弃已完成</text>
+  </g>
+
+  <!-- 安全护栏 -->
+  <rect x="850" y="566" width="320" height="172" fill="#F4EFE9" stroke="#4746C6" stroke-width="3"/>
+  <text x="870" y="600" font-size="22" font-weight="900" fill="#171717" letter-spacing="1">cwd 白名单</text>
+  <line x1="870" y1="612" x2="1150" y2="612" stroke="#4746C6" stroke-width="2"/>
+  <text x="870" y="642" font-size="15" font-weight="700" fill="#171717">--cwd-root 可重复指定</text>
+  <text x="870" y="664" font-size="15" font-weight="700" fill="#171717">默认 ~/Projects</text>
+  <text x="870" y="688" font-size="15" font-weight="700" fill="#171717">路径解析 + 前缀校验</text>
+  <text x="870" y="710" font-size="15" font-weight="700" fill="#171717">软链接同样解析</text>
+
+  <!-- 任务注册表 -->
+  <rect x="1190" y="566" width="330" height="172" fill="#F4EFE9" stroke="#4746C6" stroke-width="3"/>
+  <text x="1210" y="600" font-size="22" font-weight="900" fill="#171717" letter-spacing="1">任务注册表</text>
+  <line x1="1210" y1="612" x2="1500" y2="612" stroke="#4746C6" stroke-width="2"/>
+  <text x="1210" y="642" font-size="15" font-weight="700" fill="#171717">内存态 · 进程级隔离</text>
+  <text x="1210" y="664" font-size="15" font-weight="700" fill="#171717">running → done | error | cancelled</text>
+  <text x="1210" y="688" font-size="15" font-weight="700" fill="#171717">环形缓冲 · 单调 seq</text>
+  <text x="1210" y="710" font-size="15" font-weight="700" fill="#171717">向客户端暴露 oldestSeq</text>
+
+  <!-- spawn 标签 -->
+  <text x="760" y="780" font-size="22" font-weight="800" fill="#171717" letter-spacing="2">spawn · 无 shell · 参数数组</text>
+  <line x1="500" y1="800" x2="500" y2="880" stroke="#4746C6" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="850" y1="800" x2="850" y2="880" stroke="#4746C6" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="1200" y1="800" x2="1200" y2="880" stroke="#4746C6" stroke-width="4" marker-end="url(#arrow)"/>
+
+  <!-- 第三行：claude 工作进程 -->
+  <text x="150" y="908" font-size="22" font-weight="700" fill="#171717" letter-spacing="4">claude CLI · 并发执行 · 一个任务一个进程</text>
+
+  <rect x="380" y="932" width="240" height="120" fill="#F4EFE9" stroke="#4746C6" stroke-width="4"/>
+  <text x="500" y="970" text-anchor="middle" font-size="22" font-weight="900" fill="#171717">claude</text>
+  <text x="500" y="996" text-anchor="middle" font-size="14" font-weight="700" fill="#171717">--resume &lt;id&gt;</text>
+  <text x="500" y="1018" text-anchor="middle" font-size="14" font-weight="700" fill="#171717">stream-json</text>
+  <text x="500" y="1042" text-anchor="middle" font-size="14" font-weight="700" fill="#171717">任务 A</text>
+
+  <rect x="730" y="932" width="240" height="120" fill="#F4EFE9" stroke="#4746C6" stroke-width="4"/>
+  <text x="850" y="970" text-anchor="middle" font-size="22" font-weight="900" fill="#171717">claude</text>
+  <text x="850" y="996" text-anchor="middle" font-size="14" font-weight="700" fill="#171717">--resume &lt;id&gt;</text>
+  <text x="850" y="1018" text-anchor="middle" font-size="14" font-weight="700" fill="#171717">stream-json</text>
+  <text x="850" y="1042" text-anchor="middle" font-size="14" font-weight="700" fill="#171717">任务 B</text>
+
+  <rect x="1080" y="932" width="240" height="120" fill="#F4EFE9" stroke="#4746C6" stroke-width="4"/>
+  <text x="1200" y="970" text-anchor="middle" font-size="22" font-weight="900" fill="#171717">claude</text>
+  <text x="1200" y="996" text-anchor="middle" font-size="14" font-weight="700" fill="#171717">--resume &lt;id&gt;</text>
+  <text x="1200" y="1018" text-anchor="middle" font-size="14" font-weight="700" fill="#171717">stream-json</text>
+  <text x="1200" y="1042" text-anchor="middle" font-size="14" font-weight="700" fill="#171717">任务 C</text>
+
+  <text x="1360" y="1004" font-size="46" font-weight="900" fill="#171717">…</text>
+
+  <!-- 底部不变式 -->
+  <line x1="150" y1="1098" x2="1540" y2="1098" stroke="#4746C6" stroke-width="3"/>
+  <text x="150" y="1138" font-size="18" font-weight="800" fill="#171717" letter-spacing="2">run 立即返回 task_id  ·  wait(from_seq) 推送进度  ·  服务进程退出即清空状态  ·  全程不监听网络</text>
+</svg>
