@@ -80,6 +80,9 @@ Cursor `mcpServers` block):
 }
 ```
 
+For a real, working client integration (HTTP transport, background dispatch,
+Feishu reply-in-thread notifications), see [`clients/pi-mcp-claude/`](clients/README.md).
+
 ## The six tools
 
 | Tool | Signature | What it does |
