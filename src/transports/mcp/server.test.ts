@@ -236,6 +236,34 @@ describe('MCP server — notify_target', () => {
   });
 });
 
+describe('MCP server — requireNotifyTarget enforcement', () => {
+  it('rejects claude_run without notify_target when requireNotifyTarget=true', async () => {
+    const { client, adapter } = await connect({ requireNotifyTarget: true });
+    await expect(callTool(client, 'claude_run', { prompt: 'hi' })).rejects.toThrow(
+      /notify_target is REQUIRED/,
+    );
+    // No task should have been spawned on the adapter.
+    expect(adapter.runs).toHaveLength(0);
+  });
+
+  it('accepts claude_run with notify_target when requireNotifyTarget=true', async () => {
+    const { client } = await connect({ requireNotifyTarget: true });
+    const started = parse(
+      await callTool(client, 'claude_run', {
+        prompt: 'hi',
+        notify_target: { type: 'feishu', chat_id: 'oc_xyz' },
+      }),
+    );
+    expect(started.status).toBe('running');
+  });
+
+  it('default (requireNotifyTarget unset) still accepts bare claude_run', async () => {
+    const { client } = await connect({});
+    const started = parse(await callTool(client, 'claude_run', { prompt: 'hi' }));
+    expect(started.status).toBe('running');
+  });
+});
+
 describe('MCP server — full task lifecycle through one in-process client', () => {
   it('run → wait → status → list → cancel → forget', async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), 'ccmb-life-')));

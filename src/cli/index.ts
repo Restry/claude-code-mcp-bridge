@@ -27,9 +27,14 @@ program
     (value: string, previous: string[]) => [...previous, value],
     [] as string[],
   )
-  .action(async (opts: { cwd?: string; cwdRoot: string[] }) => {
+  .option(
+    '--require-notify-target',
+    'reject claude_run calls that omit notify_target (forces callers to wire up end-of-task notifications)',
+    false,
+  )
+  .action(async (opts: { cwd?: string; cwdRoot: string[]; requireNotifyTarget?: boolean }) => {
     const cwdRoot = opts.cwdRoot.length > 0 ? opts.cwdRoot : [DEFAULT_CWD_ROOT];
-    await runMcp({ cwd: opts.cwd, cwdRoot });
+    await runMcp({ cwd: opts.cwd, cwdRoot, requireNotifyTarget: opts.requireNotifyTarget });
   });
 
 program.parseAsync(process.argv).catch((err) => {

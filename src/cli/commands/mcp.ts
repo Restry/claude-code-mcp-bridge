@@ -3,6 +3,7 @@ import { startMcpServer } from '../../transports/mcp/server';
 export interface RunMcpOptions {
   cwd?: string;
   cwdRoot?: string[];
+  requireNotifyTarget?: boolean;
 }
 
 export async function runMcp(opts: RunMcpOptions): Promise<void> {
@@ -13,5 +14,6 @@ export async function runMcp(opts: RunMcpOptions): Promise<void> {
   await startMcpServer({
     defaultCwd: opts.cwd,
     cwdRoots: opts.cwdRoot && opts.cwdRoot.length > 0 ? opts.cwdRoot : undefined,
+    requireNotifyTarget: opts.requireNotifyTarget,
   });
 }
