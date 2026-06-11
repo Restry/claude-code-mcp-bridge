@@ -45,6 +45,16 @@
     <!-- PATH must let the bridge spawn `claude` and (for notify_target) `lark-cli` -->
     <key>PATH</key>
     <string>/Users/leway/.nvm/versions/node/v22.22.0/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <!-- launchd runs with a clean environment, so `claude` won't see your shell's
+         auth. Add whatever your claude CLI needs to authenticate. For an API-key
+         setup that's typically these two (DO NOT commit real secrets; set them in
+         the copy under ~/Library/LaunchAgents and chmod 600):
+      <key>ANTHROPIC_API_KEY</key>   <string>sk-...</string>
+      <key>ANTHROPIC_BASE_URL</key>  <string>https://...</string>
+         If your claude uses subscription login instead, set HOME so it finds its
+         credential store. -->
+    <key>HOME</key>
+    <string>/Users/leway</string>
   </dict>
 
   <key>RunAtLoad</key>
