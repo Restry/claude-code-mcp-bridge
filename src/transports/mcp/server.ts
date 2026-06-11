@@ -65,7 +65,7 @@ const TOOL_DEFINITIONS = [
             as_identity: {
               type: 'string',
               enum: ['bot', 'user'],
-              description: 'lark-cli --as flag. Defaults to "bot".',
+              description: 'lark-cli --as flag. Defaults to "user" (the bot is usually not a member of the target chat).',
             },
             notify_on_start: {
               type: 'boolean',
@@ -241,7 +241,7 @@ export async function startMcpServer(opts: McpServerOptions = {}): Promise<void>
               '    type: "feishu",',
               '    anchor_msg_id: "om_xxx",   // a message ID in the target Feishu thread',
               '    reply_in_thread: true,     // post into the thread, not the main chat',
-              '    as_identity: "user",       // "bot" if the bot is a member of the chat',
+              '    as_identity: "user",       // default; pass "bot" only if the bot is in the chat',
               '    notify_on_start: true      // optional: also notify when task is dispatched',
               '  }',
               '',

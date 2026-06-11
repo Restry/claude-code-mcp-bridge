@@ -65,7 +65,7 @@ describe('fireFeishuNotification — lark-cli arg assembly', () => {
       '--reply-in-thread',
     ]);
     expect(args).toContain('--as');
-    expect(args[args.indexOf('--as') + 1]).toBe('bot');
+    expect(args[args.indexOf('--as') + 1]).toBe('user');
     expect(args).toContain('--markdown');
   });
 

@@ -25,7 +25,7 @@ export async function fireFeishuNotification(
   if (target.type !== 'feishu') return;
 
   const content = renderMessage(snapshot, kind);
-  const asWho = target.as_identity ?? 'bot';
+  const asWho = target.as_identity ?? 'user';
 
   const args: string[] = ['im'];
   if (kind === 'end' && target.reply_in_thread && target.anchor_msg_id) {
