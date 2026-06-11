@@ -12,3 +12,6 @@ coverage/
 .DS_Store
 .idea/
 .vscode/
+
+# npm publish token (local only)
+.npmrc.publish
