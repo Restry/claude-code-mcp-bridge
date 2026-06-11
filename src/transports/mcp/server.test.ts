@@ -246,6 +246,34 @@ describe('MCP server — requireNotifyTarget enforcement', () => {
     expect(adapter.runs).toHaveLength(0);
   });
 
+  it('rejects notify_target with no routing target (no anchor_msg_id, no chat_id)', async () => {
+    const { client, adapter } = await connect({ requireNotifyTarget: true });
+    await expect(
+      callTool(client, 'claude_run', {
+        prompt: 'hi',
+        notify_target: { type: 'feishu' },
+      }),
+    ).rejects.toThrow(/routing target/);
+    await expect(
+      callTool(client, 'claude_run', {
+        prompt: 'hi',
+        notify_target: { type: 'feishu', reply_in_thread: true, notify_on_start: true },
+      }),
+    ).rejects.toThrow(/routing target/);
+    expect(adapter.runs).toHaveLength(0);
+  });
+
+  it('accepts notify_target with anchor_msg_id', async () => {
+    const { client } = await connect({ requireNotifyTarget: true });
+    const started = parse(
+      await callTool(client, 'claude_run', {
+        prompt: 'hi',
+        notify_target: { type: 'feishu', anchor_msg_id: 'om_xxx', reply_in_thread: true },
+      }),
+    );
+    expect(started.status).toBe('running');
+  });
+
   it('accepts claude_run with notify_target when requireNotifyTarget=true', async () => {
     const { client } = await connect({ requireNotifyTarget: true });
     const started = parse(

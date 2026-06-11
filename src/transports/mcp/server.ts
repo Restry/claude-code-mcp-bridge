@@ -231,23 +231,31 @@ export async function startMcpServer(opts: McpServerOptions = {}): Promise<void>
       case 'claude_run': {
         const prompt = String(args.prompt ?? '').trim();
         if (!prompt) throw new Error('prompt is required');
-        if (opts.requireNotifyTarget && (!args.notify_target || typeof args.notify_target !== 'object')) {
-          throw new Error(
-            [
-              'notify_target is REQUIRED on this server (--require-notify-target).',
-              'Pass it so the bridge can notify when your task finishes:',
-              '',
-              '  notify_target: {',
-              '    type: "feishu",',
-              '    anchor_msg_id: "om_xxx",   // a message ID in the target Feishu thread',
-              '    reply_in_thread: true,     // post into the thread, not the main chat',
-              '    as_identity: "user",       // default; pass "bot" only if the bot is in the chat',
-              '    notify_on_start: true      // optional: also notify when task is dispatched',
-              '  }',
-              '',
-              "If you genuinely don't want a notification, the caller should not have enabled --require-notify-target on this bridge.",
-            ].join('\n'),
-          );
+        if (opts.requireNotifyTarget) {
+          const nt = args.notify_target as Record<string, unknown> | undefined;
+          const hasTarget = nt && typeof nt === 'object';
+          const hasAnchor = hasTarget && typeof nt.anchor_msg_id === 'string' && nt.anchor_msg_id.length > 0;
+          const hasChat = hasTarget && typeof nt.chat_id === 'string' && nt.chat_id.length > 0;
+          if (!hasTarget || (!hasAnchor && !hasChat)) {
+            throw new Error(
+              [
+                'notify_target is REQUIRED on this server (--require-notify-target),',
+                'and must include at least one routing target: `anchor_msg_id` (to reply',
+                'into a thread) or `chat_id` (to send into the main chat stream).',
+                'Without one, the bridge has nowhere to send the completion notification.',
+                '',
+                '  notify_target: {',
+                '    type: "feishu",',
+                '    anchor_msg_id: "om_xxx",   // a message ID in the target Feishu thread',
+                '    reply_in_thread: true,     // post into the thread, not the main chat',
+                '    as_identity: "user",       // default; pass "bot" only if the bot is in the chat',
+                '    notify_on_start: true      // optional: also notify when task is dispatched',
+                '  }',
+                '',
+                "If you genuinely don't want a notification, the caller should not have enabled --require-notify-target on this bridge.",
+              ].join('\n'),
+            );
+          }
         }
         const cwd = resolveCwd(opts, typeof args.cwd === 'string' ? args.cwd : undefined);
         const sessionId = typeof args.session_id === 'string' ? args.session_id : undefined;
