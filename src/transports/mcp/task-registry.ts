@@ -11,6 +11,20 @@ export interface TaskEventRecord {
   event: AgentEvent;
 }
 
+/** Compact event for the dashboard action stream: timestamp + kind + short label. */
+export interface WireEvent {
+  ts: number;
+  kind: 'tool' | 'error';
+  label: string;
+}
+
+function briefInput(input: unknown): string {
+  if (!input || typeof input !== 'object') return '';
+  const o = input as Record<string, unknown>;
+  const v = o.command ?? o.file_path ?? o.path ?? o.pattern ?? o.query ?? o.url ?? o.description;
+  return typeof v === 'string' ? v.replace(/\s+/g, ' ').slice(0, 60) : '';
+}
+
 export interface TaskSnapshot {
   taskId: string;
   status: TaskStatus;
@@ -141,6 +155,26 @@ export class TaskRegistry {
 
   list(): TaskSnapshot[] {
     return Array.from(this.tasks.values()).map((t) => t.snapshot);
+  }
+
+  /** Last `limit` tool/error events for a task, as compact wire records with
+   *  timestamps — powers the dashboard's live CC action stream. */
+  recentEvents(taskId: string, limit = 14): WireEvent[] {
+    const task = this.tasks.get(taskId);
+    if (!task) return [];
+    const out: WireEvent[] = [];
+    for (const rec of task.events) {
+      const e = rec.event;
+      if (e.type === 'tool_use') {
+        const bi = briefInput(e.input);
+        out.push({ ts: rec.ts, kind: 'tool', label: e.name + (bi ? ' ' + bi : '') });
+      } else if (e.type === 'tool_result' && e.isError) {
+        out.push({ ts: rec.ts, kind: 'error', label: '工具返回错误' });
+      } else if (e.type === 'error') {
+        out.push({ ts: rec.ts, kind: 'error', label: (e.message || '出错').slice(0, 80) });
+      }
+    }
+    return out.slice(-limit);
   }
 
   /**

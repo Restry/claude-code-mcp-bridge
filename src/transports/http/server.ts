@@ -25,7 +25,10 @@ const DEFAULT_HOST = '127.0.0.1';
  * registry (in-progress + finished tasks) and one shared session store.
  */
 function buildState(registry: TaskRegistry, store: SessionStore) {
-  const tasks = registry.list().map(snapshotToWire);
+  const tasks = registry.list().map((s) => ({
+    ...snapshotToWire(s),
+    recent_events: registry.recentEvents(s.taskId, 14),
+  }));
   return {
     server: { name: 'claude-code-bridge', version: '0.1.0', now: Date.now() },
     counts: {
