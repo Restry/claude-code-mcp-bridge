@@ -226,9 +226,16 @@ function resolveCwd(opts: McpServerOptions, requested?: string): string {
   const candidate = realpathOrLexical(resolvePath(raw));
   if (opts.cwdRoots && opts.cwdRoots.length > 0) {
     const normalizedRoots = opts.cwdRoots.map((r) => realpathOrLexical(resolvePath(r)));
-    const ok = normalizedRoots.some(
-      (root) => candidate === root || candidate.startsWith(root + pathSep),
-    );
+    // macOS/Windows filesystems are case-insensitive, so compare case-insensitively
+    // there — otherwise a root configured as ".../projects" rejects a correctly
+    // cased ".../Projects/..." cwd (and vice versa). Linux stays case-sensitive.
+    const ci = process.platform === 'darwin' || process.platform === 'win32';
+    const norm = (p: string) => (ci ? p.toLowerCase() : p);
+    const c = norm(candidate);
+    const ok = normalizedRoots.some((root) => {
+      const r = norm(root);
+      return c === r || c.startsWith(r + pathSep);
+    });
     if (!ok) {
       throw new Error(
         `cwd "${candidate}" is outside the allowed roots: ${normalizedRoots.join(', ')}`,
