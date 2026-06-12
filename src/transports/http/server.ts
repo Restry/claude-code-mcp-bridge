@@ -8,6 +8,7 @@ import { TaskRegistry } from '../mcp/task-registry';
 import { SessionStore } from '../mcp/session-store';
 import { buildServer, snapshotToWire, type McpServerOptions } from '../mcp/server';
 import { renderDashboard } from './dashboard';
+import { scanAllSessions } from '../../agent/claude/local-sessions';
 
 export interface HttpServerOptions extends McpServerOptions {
   port?: number;
@@ -107,6 +108,27 @@ export async function startHttpServer(opts: HttpServerOptions = {}): Promise<voi
     }
     if (req.method === 'GET' && url.pathname === '/api/state') {
       send(res, 200, JSON.stringify(buildState(registry, sessionStore)), 'application/json');
+      return;
+    }
+    // ALL local Claude Code sessions on disk (~/.claude/projects), not just
+    // bridge-spawned ones. ?limit=N (default 200, newest first) | ?limit=all |
+    // ?cwd=<substr> to filter by working dir.
+    if (req.method === 'GET' && url.pathname === '/api/sessions/all') {
+      const limitParam = url.searchParams.get('limit');
+      let limit: number | null = 200;
+      if (limitParam === 'all') {
+        limit = null;
+      } else if (limitParam !== null) {
+        const n = Number.parseInt(limitParam, 10);
+        if (Number.isFinite(n)) limit = Math.max(0, n);
+      }
+      const cwdFilter = url.searchParams.get('cwd') ?? undefined;
+      try {
+        const result = scanAllSessions({ limit, cwdFilter });
+        send(res, 200, JSON.stringify(result), 'application/json');
+      } catch (err) {
+        send(res, 500, JSON.stringify({ error: 'scan failed', detail: err instanceof Error ? err.message : String(err) }), 'application/json');
+      }
       return;
     }
     if (req.method === 'GET' && url.pathname === '/healthz') {
