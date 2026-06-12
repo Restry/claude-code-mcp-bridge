@@ -8,7 +8,7 @@ import { TaskRegistry } from '../mcp/task-registry';
 import { SessionStore } from '../mcp/session-store';
 import { buildServer, snapshotToWire, type McpServerOptions } from '../mcp/server';
 import { renderDashboard } from './dashboard';
-import { scanAllSessions } from '../../agent/claude/local-sessions';
+import { scanAllSessions, scanTranscript } from '../../agent/claude/local-sessions';
 
 export interface HttpServerOptions extends McpServerOptions {
   port?: number;
@@ -128,6 +128,18 @@ export async function startHttpServer(opts: HttpServerOptions = {}): Promise<voi
         send(res, 200, JSON.stringify(result), 'application/json');
       } catch (err) {
         send(res, 500, JSON.stringify({ error: 'scan failed', detail: err instanceof Error ? err.message : String(err) }), 'application/json');
+      }
+      return;
+    }
+    // One session's flattened transcript (tail-read). ?file=<abs path>&limit=N
+    if (req.method === 'GET' && url.pathname === '/api/sessions/transcript') {
+      const file = url.searchParams.get('file') ?? '';
+      const lp = url.searchParams.get('limit');
+      const limit = lp ? Math.min(1000, Math.max(1, Number.parseInt(lp, 10) || 200)) : 200;
+      try {
+        send(res, 200, JSON.stringify(scanTranscript({ file, limit })), 'application/json');
+      } catch (err) {
+        send(res, 400, JSON.stringify({ error: 'transcript failed', detail: err instanceof Error ? err.message : String(err) }), 'application/json');
       }
       return;
     }

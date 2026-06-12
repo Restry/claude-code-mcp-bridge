@@ -1,4 +1,4 @@
-import { readdirSync, statSync, openSync, readSync, closeSync } from 'node:fs';
+import { readdirSync, statSync, openSync, readSync, closeSync, fstatSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -193,3 +193,102 @@ export function scanAllSessions(opts: ScanOptions = {}): ScanResult {
 
   return { root, total, returned: sessions.length, sessions };
 }
+
+// ── transcript: tail-read + flatten one session's conversation ──────────────
+
+export interface TranscriptBlock {
+  type: 'text' | 'tool_use' | 'tool_result';
+  role: 'user' | 'assistant' | 'system';
+  text: string;
+  tool_name?: string;
+  tool_input?: unknown;
+  tool_id?: string;
+  ts: number | null;
+}
+export interface TranscriptResult {
+  session_id: string;
+  file: string;
+  total_lines: number;
+  returned: number;
+  messages: TranscriptBlock[];
+}
+
+const TAIL_BYTES = 512 * 1024;          // never full-read multi-MB sessions
+const PROJECTS_ROOT = join(homedir(), '.claude', 'projects');
+
+/** Read the last `maxBytes` of a file. `truncated` means the first line is partial. */
+function readTail(file: string, maxBytes = TAIL_BYTES): { text: string; truncated: boolean } {
+  const fd = openSync(file, 'r');
+  try {
+    const { size } = fstatSync(fd);
+    const start = Math.max(0, size - maxBytes);
+    const len = size - start;
+    const buf = Buffer.allocUnsafe(len);
+    readSync(fd, buf, 0, len, start);
+    return { text: buf.toString('utf8'), truncated: start > 0 };
+  } finally {
+    closeSync(fd);
+  }
+}
+
+function stringifyToolResult(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    const parts: string[] = [];
+    for (const b of content) {
+      if (b && typeof b === 'object') {
+        const t = (b as { text?: unknown; type?: string }).text;
+        if (typeof t === 'string') parts.push(t);
+        else parts.push(JSON.stringify(b));
+      } else if (typeof b === 'string') parts.push(b);
+    }
+    return parts.join('\n');
+  }
+  return content == null ? '' : JSON.stringify(content);
+}
+
+/** Parse a session jsonl into a flat list of conversation blocks (tail-only). */
+export function scanTranscript(opts: { file: string; limit?: number }): TranscriptResult {
+  const file = opts.file;
+  // Path safety: must live under ~/.claude/projects and be a .jsonl.
+  if (!file.endsWith('.jsonl') || !file.startsWith(PROJECTS_ROOT)) {
+    throw new Error('file must be a .jsonl under ~/.claude/projects');
+  }
+  const limit = Math.min(1000, Math.max(1, opts.limit || 200));
+  const session_id = file.slice(file.lastIndexOf('/') + 1, -'.jsonl'.length);
+
+  const { text, truncated } = readTail(file);
+  let lines = text.split('\n');
+  if (truncated && lines.length) lines = lines.slice(1); // drop partial first line
+
+  const out: TranscriptBlock[] = [];
+  let total = 0;
+  for (const line of lines) {
+    const s = line.trim();
+    if (!s) continue;
+    let o: Record<string, unknown>;
+    try { o = JSON.parse(s) as Record<string, unknown>; } catch { continue; }
+    const type = o.type;
+    if (type !== 'user' && type !== 'assistant' && type !== 'system') continue;
+    total += 1;
+    const msg = (o.message || {}) as { role?: string; content?: unknown };
+    const role = (msg.role === 'assistant' ? 'assistant' : type === 'system' ? 'system' : 'user') as TranscriptBlock['role'];
+    const ts = typeof o.timestamp === 'string' ? (Date.parse(o.timestamp) || null) : null;
+    const content = msg.content;
+    if (typeof content === 'string') {
+      if (content.trim()) out.push({ type: 'text', role, text: content, ts });
+    } else if (Array.isArray(content)) {
+      for (const blk of content) {
+        if (!blk || typeof blk !== 'object') continue;
+        const b = blk as { type?: string; text?: string; name?: string; input?: unknown; id?: string; tool_use_id?: string; content?: unknown };
+        if (b.type === 'text' && b.text) out.push({ type: 'text', role, text: b.text, ts });
+        else if (b.type === 'tool_use') out.push({ type: 'tool_use', role, text: '', tool_name: b.name, tool_input: b.input, tool_id: b.id, ts });
+        else if (b.type === 'tool_result') out.push({ type: 'tool_result', role, text: stringifyToolResult(b.content), tool_id: b.tool_use_id, ts });
+      }
+    }
+  }
+
+  const messages = out.slice(-limit);
+  return { session_id, file, total_lines: total, returned: messages.length, messages };
+}
+
